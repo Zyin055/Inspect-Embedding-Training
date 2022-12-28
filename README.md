@@ -28,6 +28,8 @@ Since each token in an embedding has 768 vectors, this can add up to a lot of li
 * Place the inspect_embedding_training.py file at "Stable Diffusion\textual_inversion\YYYY-MM-DD\YourEmbeddingName" in your Automatic1111 installation.
 * If you have Python set to run .py files, just double click the file to run it. Otherwise, open a command window in the directory and type `python inspect_embedding_training.py` and hit Enter.
 
+![folder](https://i.imgur.com/tiM89rS.jpg)
+
 ## Configuration
 Open the inspect_embedding_training.py file with notepad to edit some variables near the top of the file:
 ```
