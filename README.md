@@ -51,7 +51,7 @@ VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0
 * `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
 
 ## Changelog
-#### 1.0 - 12/28/2022
+#### 12/28/2022
 * Initial release
 
 ## Special thanks
