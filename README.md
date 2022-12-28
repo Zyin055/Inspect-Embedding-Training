@@ -1,5 +1,5 @@
 ## What does this do?
-This Python script is used to analyze embeddings trained with textual inversion using the [Automatic1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui). When ran, it will create graphs of the loss rate of the embedding and the magnitude of its vectors.
+This Python script is used to analyze embeddings trained with textual inversion using the [Automatic1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui). When ran, it will create graphs of the loss rate of the embedding and the magnitude of its vectors. It's safe to run while the embedding is being trained.
 
 ## Screenshots
 Example of the script being run
@@ -49,3 +49,6 @@ VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0
 ## Changelog
 #### 1.0 - 12/28/2022
 * Initial release
+
+## Special thanks
+Shondoit - for supplying the base code for loading and graphing the data.

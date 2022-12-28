@@ -16,13 +16,13 @@ from torch import Tensor
 SAVE_LOSS_GRAPH_IMG: bool = True              # Create a .jpg of the Loss graph
 SAVE_VECTOR_GRAPH_IMG: bool = True            # Create a .jpg of the Vector graph
 
-SHOW_PLOTS_AFTER_GENERATION: bool = False      # Show the Loss and Vector graphs after running this script
+SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show the Loss and Vector graphs after running this script
 
 GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)   # (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
 GRAPH_SHOW_TITLE: bool = True                 # Adds the embed name at the top of the graphs
 
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True  # Adds the learning rate labels and vertical lines on the vector graph
-VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines, set to 0 or None to draw all the vectors. Normally there are 768 vectors per token.
+VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0       # Limits to this number of vectors drawn on the vector graph to this many lines, set to 0 to draw all the vectors. Normally there are 768 vectors per token.
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
