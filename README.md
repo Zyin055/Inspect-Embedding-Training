@@ -6,17 +6,19 @@ Example of the script being run
 
 ![cmd](https://i.imgur.com/8SCCnsX.jpg)
 
-It will output two images.
+It will output two images:
 
-TestEmbed-[step]-loss.jpg, which plots the loss rate from the textual_inversion_loss.csv file. In your A1111 settings, set the "Save an csv containing the loss to log directory every N steps, 0 to disable" setting to 1 for best results. Ideally you want a loss rate average to be less than 0.30.
+Image #1: TestEmbed-[step]-loss.jpg, which plots the loss rate from the textual_inversion_loss.csv file. In your A1111 settings, set the "Save an csv containing the loss to log directory every N steps, 0 to disable" setting to 1 for best results. Ideally you want a loss rate average to be less than 0.30.
 
 ![TestEmbed-500-loss](https://i.imgur.com/i2BvuM0.jpg)
 
-TestEmbed-[step]-vector.jpg, which plots the magnitude of each vector inside the embedding. The higher the magnitudes, the less flexible the the embedding will be to other words in a prompt.
+Image #2: TestEmbed-[step]-vector.jpg, which plots the magnitude of each vector inside the embedding. The higher the magnitudes, the less flexible the the embedding will be to other words in a prompt.
+
+In this example, the embedding had a learning rate of: 0.05:10, 0.02:20, 0.01:60, 0.005:200, 0.002:500, 0.001:3000, 0.0005
 
 ![TestEmbed-500-vector](https://i.imgur.com/A5AbHpQ.jpg)
 
-Since each token in an embedding has 768 vectors, this can add up to a lot of lines being plotted and end up in a jumbled mess. In the .py file you can change the VECTOR_GRAPH_LIMIT_NUM_VECTORS variable to limit how many are plotted.
+Since each token in an embedding has 768 vectors, this can add up to a lot of lines being plotted and end up in a jumbled mess. In the .py file you can change the `VECTOR_GRAPH_LIMIT_NUM_VECTORS` variable to limit how many are plotted.
 
 ![TestEmbed-500-vector-(100-vector-limit)](https://i.imgur.com/F3ZWiHD.jpg)
 
@@ -42,9 +44,9 @@ VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0
 ```
 
 ## Optional launch arguments
-* --help, -h	Shows help text.
-* --dir			The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
-* --out			The "/path/to/an/output/folder" to use instead of the local path for outputting images.
+* `--help, -h` Shows help text.
+* `--dir` The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
+* `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
 
 ## Changelog
 #### 1.0 - 12/28/2022
