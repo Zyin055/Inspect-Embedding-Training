@@ -32,7 +32,7 @@ Since each token in an embedding has 768 vectors, this can add up to a lot of li
 
 ## Configuration
 Open the inspect_embedding_training.py file with notepad to edit some variables near the top of the file:
-```
+```python
 SAVE_LOSS_GRAPH_IMG: bool = True
 SAVE_VECTOR_GRAPH_IMG: bool = True
 
