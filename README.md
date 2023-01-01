@@ -22,7 +22,7 @@ Since each token in an embedding has 768 vectors, this can add up to a lot of li
 
 ![TestEmbed-500-vector-(100-vector-limit)](https://i.imgur.com/F3ZWiHD.jpg)
 
-If all you want to do is inspect an existing embedding file that you downloaded from the internet, you can use the `--file EmbeddingName` with the EmbeddingName file next to the script.
+If all you want to do is inspect an existing embedding file that you downloaded from the internet, you can use `--file EmbeddingName` with the EmbeddingName.pt file next to the script.
 
 ![file](https://i.imgur.com/nnutinm.jpg)
 
