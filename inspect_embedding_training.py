@@ -14,20 +14,22 @@ from torch import Tensor
 #                                                      CONFIG                                                         #
 #######################################################################################################################
 SAVE_LOSS_GRAPH_IMG: bool = True              # Create a .jpg of the Loss graph
-SAVE_VECTOR_GRAPH_IMG: bool = True            # Create a .jpg of the Vector graph
+SAVE_VECTOR_GRAPH_IMG: bool = True            # Create a .jpg of the Vector graphs
 
-SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show the Loss and Vector graphs after running this script
+SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show a popup with the Loss and Vector graphs after running this script
 
 GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)   # (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
 GRAPH_SHOW_TITLE: bool = True                 # Adds the embed name at the top of the graphs
 
-VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True  # Adds the learning rate labels and vertical lines on the vector graph
-VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0       # Limits to this number of vectors drawn on the vector graph to this many lines, set to 0 to draw all the vectors. Normally there are 768 vectors per token.
+VECTOR_GRAPH_CREATE_FULL_GRAPH = True                 # Generates a vector graph with all vectors displayed
+VECTOR_GRAPH_CREATE_LIMITED_GRAPH = False             # Generates a vector graph with limited number of vectors displayed
+VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
+VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
 
-
+DIMS_PER_VECTOR = 768
 BASEDIR: str = os.path.realpath(os.path.dirname(__file__))   # the path where this .py file is located, ex "C:\Stable Diffusion\textual_inversion\2022-12-30\EmbedFolderName"
 output_dir: str = BASEDIR    # where the output graph images are saved
 working_dir: str = BASEDIR   # where we look for embeddings
@@ -35,7 +37,7 @@ working_dir: str = BASEDIR   # where we look for embeddings
 
 def parse_args(argv) -> None:
     try:
-        opts, args = getopt.getopt(argv[1:], "h", ["help", "dir=", "out="])
+        opts, args = getopt.getopt(argv[1:], "h", ["help", "dir=", "out=", "file="])
     except getopt.GetoptError as e:
         sys.exit(e)
 
@@ -59,7 +61,49 @@ def parse_args(argv) -> None:
             global output_dir
             output_dir = arg
             print(f"Output directory set to: {output_dir}")
+        elif opt == "--file":
+            embedding_file_name = arg
+            inspect_embedding_file(embedding_file_name)
+            sys.exit(0)
 
+
+def inspect_embedding_file(embedding_file_name: str) -> None:
+    split_tup = os.path.splitext(embedding_file_name)
+    file_name = split_tup[0]
+    file_extension = split_tup[1]
+
+    if file_extension == "":
+        embedding_file_name = embedding_file_name + ".pt"   #fix user error, add file extension
+
+    elif file_extension != ".pt":
+        print(f"[ERROR] '{embedding_file_name}' is not a .pt file.")
+        sys.exit(1)
+
+    magnitude, vectors_per_token, step = get_embedding_file_data(embedding_file_name)
+
+    print(f"Data for embedding file: {embedding_file_name}")
+    print(f"  Average vector magnitude: {round(magnitude, 4)}")
+    print(f"  {vectors_per_token} vectors per token")
+    print(f"  {step} training steps")
+
+
+def get_embedding_file_data(embedding_file_name: str) -> (float, int, int):
+    global DIMS_PER_VECTOR
+    highest_step = -1
+    vector_data = {}
+
+    try:
+        embed = torch.load(embedding_file_name, map_location="cpu")
+        v = embed["string_to_param"]["*"]
+        highest_step = embed["step"] + 1  # starts counting at 0, so add 1
+        vector_data[highest_step] = torch.flatten(v).tolist()
+        magnitude = get_vector_data_magnitude(vector_data, highest_step)
+        vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
+    except FileNotFoundError as e:
+        #print(f"[ERROR] Embedding file {embedding_file_name} not found.")
+        sys.exit(e)
+
+    return magnitude, vectors_per_token, highest_step
 
 
 def load_textual_inversion_loss_data_from_file(file: str) -> dict[int, dict[str, str]]:
@@ -68,13 +112,13 @@ def load_textual_inversion_loss_data_from_file(file: str) -> dict[int, dict[str,
             return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
     else:
         print(f"[ERROR] Could not find file: {file}")
-        print("[ERROR] This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
-        sys.exit(os.EX_NOTFOUND)
+        print("This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
+        sys.exit()
 
 
 
 def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
-    DIMS_PER_VECTOR = 768
+    global DIMS_PER_VECTOR
     embed_name = None        # "EmbedName"
     number_of_embedding_files = 0
     highest_step = -1
@@ -140,21 +184,17 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
     if title is not None:
         x = (min_x_value + max_x_value) / 2
         y = (max_y_value - min_y_value) * 1.10 + min_y_value
-        plt.text(x, y, title, fontsize="20", ha="center", va="center")  # Title at the top
+        plt.text(x, y, title, fontsize="20", ha="center", va="center")
 
     if save_img:
         plt.savefig(output_dir + "/" + output_file_name)
         print(f"Created: {output_file_name}")
 
 
-def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rate_changes: dict[int, (int, float)], highest_step: int, show_learning_rate: bool, save_img: bool, output_file_name: str) -> None:
-    global VECTOR_GRAPH_LIMIT_NUM_VECTORS
-
+def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rate_changes: dict[int, (int, float)], highest_step: int, show_learning_rate: bool, save_img: bool, output_file_name: str, limit_num_vectors: int) -> None:
     vectors_shown_text = None
-    if 0 < VECTOR_GRAPH_LIMIT_NUM_VECTORS < len(data[highest_step]):
-        vectors_shown_text = f"{VECTOR_GRAPH_LIMIT_NUM_VECTORS} of {len(data[highest_step])} vectors shown"
-        for step in data:
-            data[step] = data[step][:VECTOR_GRAPH_LIMIT_NUM_VECTORS]
+    if 0 < limit_num_vectors < len(data[highest_step]):
+        vectors_shown_text = f"{limit_num_vectors} of {len(data[highest_step])} vectors shown"
 
     plt.figure(figsize=GRAPH_IMAGE_SIZE)
     plt.plot(pd.DataFrame(data).T.sort_index())
@@ -184,18 +224,32 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
     if vectors_shown_text is not None:
         x = (min_x_value + max_x_value) / 2
         y = min_y_value - (max_y_value - min_y_value) * 0.10
-        plt.text(x, y, vectors_shown_text, fontsize="10", ha="center", va="center")  # Title at the top
+        plt.text(x, y, vectors_shown_text, fontsize="10", ha="center", va="center")
 
     if title is not None:
         x = (min_x_value + max_x_value) / 2
         y = (max_y_value - min_y_value) * 1.10 + min_y_value
-        plt.text(x, y, title, fontsize="20", ha="center", va="center")  # Title at the top
+        plt.text(x, y, title, fontsize="20", ha="center", va="center")
+
+    magnitude = get_vector_data_magnitude(data, highest_step)
+    x = (max_x_value - min_x_value) * 0.065 + max_x_value
+    y = (max_y_value + min_y_value) / 2
+    plt.text(x, y, f"Average vector magnitude:\n{round(magnitude, 4)}", fontsize="9", ha="center", va="center")
 
     if save_img:
         plt.savefig(output_dir + "/" + output_file_name)
         print(f"Created: {output_file_name}")
 
+    print(f"  Average vector magnitude: {round(magnitude, 4)}")
 
+
+
+def get_vector_data_magnitude(data: dict[int, dict[int, Tensor]], step: int) -> float:
+    magnitude = 0
+    for n in data[step]:
+        magnitude += abs(n)
+    magnitude = magnitude / len(data[step]) # the average value of each vector (ignoring negative values)
+    return magnitude
 
 def main():
 
@@ -203,7 +257,7 @@ def main():
 
     if not SAVE_LOSS_GRAPH_IMG and not SAVE_VECTOR_GRAPH_IMG and not SHOW_PLOTS_AFTER_GENERATION:
         print("[ERROR] Not set to create or show any plots. Change the global variables so that this script can do something.")
-        sys.exit(os.EX_CONFIG)
+        sys.exit()
 
 
     embeddings_dir = os.path.join(working_dir, "embeddings")
@@ -252,24 +306,48 @@ def main():
 
     if number_of_embedding_files == 0:
         print(f"[ERROR] Could not find any embedding .pt files in {embeddings_dir}")
-        sys.exit(os.EX_NOTFOUND)
+        sys.exit()
     elif number_of_embedding_files == 1:
         print("[WARNING] Only 1 embedding file found, the vector plot won't show any useful data.")
 
 
     if SAVE_VECTOR_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # vector plot
-        if 0 < VECTOR_GRAPH_LIMIT_NUM_VECTORS < len(vector_data[highest_step]):
-            output_file_name = f"{embed_name}-{highest_step}-vector-({VECTOR_GRAPH_LIMIT_NUM_VECTORS}-vector-limit).jpg"
+        if 0 < VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS < len(vector_data[highest_step]):
+            output_file_name = f"{embed_name}-{highest_step}-vector-({VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}-vector-limit).jpg"
         else:
             output_file_name = f"{embed_name}-{highest_step}-vector.jpg"
-        create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
-                           data=vector_data,
-                           learn_rate_changes=learn_rate_changes,
-                           highest_step=highest_step,
-                           show_learning_rate=VECTOR_GRAPH_SHOW_LEARNING_RATE,
-                           save_img=SAVE_VECTOR_GRAPH_IMG,
-                           output_file_name=output_file_name,
-                           )
+
+
+
+        if VECTOR_GRAPH_CREATE_FULL_GRAPH:
+
+            create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
+                               data=vector_data,
+                               learn_rate_changes=learn_rate_changes,
+                               highest_step=highest_step,
+                               show_learning_rate=VECTOR_GRAPH_SHOW_LEARNING_RATE,
+                               save_img=SAVE_VECTOR_GRAPH_IMG,
+                               output_file_name=f"{embed_name}-{highest_step}-vector.jpg",
+                               limit_num_vectors=-1,
+                               )
+
+        if VECTOR_GRAPH_CREATE_LIMITED_GRAPH:
+            if 0 < VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS < len(vector_data[highest_step]):
+                for step in vector_data:
+                    vector_data[step] = vector_data[step][:VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS]
+
+                create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
+                                   data=vector_data,
+                                   learn_rate_changes=learn_rate_changes,
+                                   highest_step=highest_step,
+                                   show_learning_rate=VECTOR_GRAPH_SHOW_LEARNING_RATE,
+                                   save_img=SAVE_VECTOR_GRAPH_IMG,
+                                   output_file_name=f"{embed_name}-{highest_step}-vector-({VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}-vector-limit).jpg",
+                                   limit_num_vectors=VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS,
+                                   )
+            else:
+                print(f"[ERROR] VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS is set to {VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}. It needs to be greater than 0, or less than {len(vector_data[highest_step])}.")
+
     else:
         print("Skipping making a vector plot.")
 
