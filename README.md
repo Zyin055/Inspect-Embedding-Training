@@ -30,6 +30,8 @@ Since each token in an embedding has 768 vectors, this can add up to a lot of li
 
 ![folder](https://i.imgur.com/tiM89rS.jpg)
 
+If you get the error `ModuleNotFoundError: No module named 'torch'` when running the script, open a console and run the command `pip install torch` and try again.
+
 ## Configuration
 Open the inspect_embedding_training.py file with notepad to edit some variables near the top of the file:
 ```python
