@@ -26,6 +26,8 @@ If all you want to do is inspect an existing embedding file that you downloaded 
 
 ![file](https://i.imgur.com/S4SHU0z.jpg)
 
+Strength is simply an average value of the vectors (negative values are turned positive so it doesn't always equal 0). Magnitude measures the mathematical magnitude, which is the sqrt of the sum of squares.
+
 ## How to use
 * Download the script by clicking the green "Code" button up top and then Download ZIP.
 * Unzip it
