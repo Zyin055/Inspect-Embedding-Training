@@ -24,7 +24,7 @@ Since each token in an embedding has 768 vectors, this can add up to a lot of li
 
 If all you want to do is inspect an existing embedding file that you downloaded from the internet, you can use `--file EmbeddingName` with the EmbeddingName.pt file next to the script.
 
-![file](https://i.imgur.com/nnutinm.jpg)
+![file](https://i.imgur.com/S4SHU0z.jpg)
 
 ## How to use
 * Download the script by clicking the green "Code" button up top and then Download ZIP.
@@ -57,12 +57,12 @@ VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
 * `--help, -h` Shows help text.
 * `--dir` The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
 * `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
-* `--file` The "EmbeddingName.pt" to inspect. Displays average vector magnitude, number of vectors per token, and training step count.
+* `--file` The "EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
 
 ## Changelog
 #### 1/01/2023
-* Added --file launch arg to inspect an individual embedding file to get its number of vectors per token, training step count, and average vector magnitude
-* Now displays the average vector's magnitude in the console and right hand side of the graph
+* Added `--file` launch arg to inspect an individual embedding file to get its internal info: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
+* Now displays the average vector's strength/magnitude in the console and right hand side of the graph
 #### 12/28/2022
 * Initial release
 
