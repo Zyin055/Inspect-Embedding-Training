@@ -1,6 +1,7 @@
 import os
 import csv
 import sys
+import math
 import torch
 import getopt
 import numpy as np
@@ -21,8 +22,8 @@ SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show a popup with the Loss and V
 GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)   # (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
 GRAPH_SHOW_TITLE: bool = True                 # Adds the embed name at the top of the graphs
 
-VECTOR_GRAPH_CREATE_FULL_GRAPH = True                 # Generates a vector graph with all vectors displayed
-VECTOR_GRAPH_CREATE_LIMITED_GRAPH = False             # Generates a vector graph with limited number of vectors displayed
+VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True                 # Generates a vector graph with all vectors displayed
+VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False             # Generates a vector graph with limited number of vectors displayed
 VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
 #######################################################################################################################
@@ -67,6 +68,22 @@ def parse_args(argv) -> None:
             sys.exit(0)
 
 
+
+def multiply_embedding_vectors(embedding_file_name: str, multiplier: float) -> str:
+    embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+    string_to_token = embed["string_to_token"]
+    token = list(string_to_token.keys())[0]
+
+    #print(f'embed["string_to_param"][token] before = {embed["string_to_param"][token]}')
+    embed["string_to_param"][token] = embed["string_to_param"][token] * multiplier
+    #print(f'embed["string_to_param"][token] after = {embed["string_to_param"][token]}')
+
+    out_file_name = f"{embedding_file_name}_x{multiplier}.pt"
+    torch.save(embed, out_file_name)
+    print(f"Saved: {out_file_name}")
+    return out_file_name
+
+
 def inspect_embedding_file(embedding_file_name: str) -> None:
     split_tup = os.path.splitext(embedding_file_name)
     file_name = split_tup[0]
@@ -79,31 +96,48 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
         print(f"[ERROR] '{embedding_file_name}' is not a .pt file.")
         sys.exit(1)
 
-    magnitude, vectors_per_token, step = get_embedding_file_data(embedding_file_name)
+    _, _, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
 
     print(f"Data for embedding file: {embedding_file_name}")
+    print(f"  Internal name: {internal_name}")
+    print(f"  Model name it was trained on: {sd_checkpoint_name}")
+    print(f"  Model hash it was trained on: {sd_checkpoint_hash}")
+    print(f"  Token: {token}")
+    print(f"  Vectors per token: {vectors_per_token}")
+    print(f"  Total training steps: {step}")
+    print(f"  Average vector strength: {round(strength, 4)}")
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
-    print(f"  {vectors_per_token} vectors per token")
-    print(f"  {step} training steps")
 
 
-def get_embedding_file_data(embedding_file_name: str) -> (float, int, int):
+def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[str, Tensor], str, int, str, str, str, int, float, float):
     global DIMS_PER_VECTOR
-    highest_step = -1
-    vector_data = {}
 
     try:
-        embed = torch.load(embedding_file_name, map_location="cpu")
-        v = embed["string_to_param"]["*"]
-        highest_step = embed["step"] + 1  # starts counting at 0, so add 1
-        vector_data[highest_step] = torch.flatten(v).tolist()
-        magnitude = get_vector_data_magnitude(vector_data, highest_step)
-        vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
+        #embed = torch.load(embedding_file_name, map_location="cpu")
+        embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+
     except FileNotFoundError as e:
-        #print(f"[ERROR] Embedding file {embedding_file_name} not found.")
+        print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
 
-    return magnitude, vectors_per_token, highest_step
+    vector_data = {}
+    string_to_token = embed["string_to_token"]  #{'*': 265}
+    string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
+    internal_name = embed["name"]               #EmbedTest
+    step = embed["step"] + 1                    #1000
+    sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
+    sd_checkpoint_name = embed["sd_checkpoint_name"]    #v1-5-pruned
+    token = list(string_to_token.keys())[0]  #"*"
+
+    tensors = embed["string_to_param"][token]
+    #step = embed["step"] + 1  # starts counting at 0, so add 1
+    vector_data[step] = torch.flatten(tensors).tolist()
+    magnitude = get_vector_data_magnitude(vector_data, step)
+    strength = get_vector_data_strength(vector_data, step)
+    vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
+
+
+    return string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength
 
 
 def load_textual_inversion_loss_data_from_file(file: str) -> dict[int, dict[str, str]]:
@@ -127,11 +161,17 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
         for embed_file_name in os.listdir(embedding_dir):  # "EmbedName-500.pt"
             if not embed_file_name.endswith(".pt"):
                 continue
+
             embed_path = os.path.join(embedding_dir, embed_file_name)
             embed = torch.load(embed_path, map_location="cpu")
-            v = embed["string_to_param"]["*"]
-            step = embed["step"] + 1  # starts counting at 0, so add 1
-            vector_data[step] = torch.flatten(v).tolist()
+            #tensors = embed["string_to_param"]["*"]
+            #step = embed["step"] + 1  # starts counting at 0, so add 1
+            #vector_data[step] = torch.flatten(tensors).tolist()
+            #number_of_embedding_files += 1
+
+            string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
+            tensors = embed["string_to_param"][token]
+            vector_data[step] = torch.flatten(tensors).tolist()
             number_of_embedding_files += 1
 
             # print(f"step:{step}")
@@ -231,25 +271,40 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
         y = (max_y_value - min_y_value) * 1.10 + min_y_value
         plt.text(x, y, title, fontsize="20", ha="center", va="center")
 
-    magnitude = get_vector_data_magnitude(data, highest_step)
+    strength = get_vector_data_strength(data, highest_step)
     x = (max_x_value - min_x_value) * 0.065 + max_x_value
     y = (max_y_value + min_y_value) / 2
+    plt.text(x, y, f"Average vector strength:\n{round(strength, 4)}", fontsize="9", ha="center", va="center")
+
+    magnitude = get_vector_data_magnitude(data, highest_step)
+    x = (max_x_value - min_x_value) * 0.065 + max_x_value
+    y = (max_y_value + min_y_value) / 2 - (max_y_value - min_y_value) * 0.1
     plt.text(x, y, f"Average vector magnitude:\n{round(magnitude, 4)}", fontsize="9", ha="center", va="center")
 
     if save_img:
         plt.savefig(output_dir + "/" + output_file_name)
         print(f"Created: {output_file_name}")
 
+    print(f"  Average vector strength: {round(strength, 4)}")
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
 
 
 
-def get_vector_data_magnitude(data: dict[int, dict[int, Tensor]], step: int) -> float:
-    magnitude = 0
+def get_vector_data_strength(data: dict[int, dict[int, Tensor]], step: int) -> float:
+    value = 0
     for n in data[step]:
-        magnitude += abs(n)
-    magnitude = magnitude / len(data[step]) # the average value of each vector (ignoring negative values)
-    return magnitude
+        value += abs(n)
+    value = value / len(data[step]) # the average value of each vector (ignoring negative values)
+    return value
+
+
+def get_vector_data_magnitude(data: dict[int, dict[int, Tensor]], step: int) -> float:
+    value = 0
+    for n in data[step]:
+        value += pow(n, 2)
+    value = math.sqrt(value)
+    return value
+
 
 def main():
 
