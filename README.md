@@ -18,9 +18,13 @@ In this example, the embedding had a learning rate of: 0.05:10, 0.02:20, 0.01:60
 
 ![TestEmbed-500-vector](https://i.imgur.com/A5AbHpQ.jpg)
 
-Since each token in an embedding has 768 vectors, this can add up to a lot of lines being plotted and end up in a jumbled mess. In the .py file you can change the `VECTOR_GRAPH_LIMIT_NUM_VECTORS` variable to limit how many are plotted.
+Since each token in an embedding has 768 vectors, this can add up to a lot of lines being plotted and end up in a jumbled mess. In the .py file you set `VECTOR_GRAPH_CREATE_LIMITED_GRAPH = True` and change the `VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS` variable to limit how many are plotted.
 
 ![TestEmbed-500-vector-(100-vector-limit)](https://i.imgur.com/F3ZWiHD.jpg)
+
+If all you want to do is inspect an existing embedding file that you downloaded from the internet, you can use `--file EmbeddingName` with the EmbeddingName.pt file next to the script.
+
+![file](https://i.imgur.com/S4SHU0z.jpg)
 
 ## How to use
 * Download the script by clicking the green "Code" button up top and then Download ZIP.
@@ -43,16 +47,22 @@ SHOW_PLOTS_AFTER_GENERATION: bool = False
 GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)
 GRAPH_SHOW_TITLE: bool = True
 
+VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True
+VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False
+VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
-VECTOR_GRAPH_LIMIT_NUM_VECTORS: int = 0
 ```
 
 ## Optional launch arguments
 * `--help, -h` Shows help text.
 * `--dir` The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
 * `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
+* `--file` The "EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
 
 ## Changelog
+#### 1/01/2023
+* Added `--file` launch arg to inspect an individual embedding file to get its internal info: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
+* Now displays the average vector's strength/magnitude in the console and right hand side of the graph
 #### 12/28/2022
 * Initial release
 
