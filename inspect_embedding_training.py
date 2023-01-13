@@ -302,7 +302,8 @@ def get_vector_data_magnitude(data: dict[int, dict[int, Tensor]], step: int) -> 
     value = 0
     for n in data[step]:
         value += pow(n, 2)
-    value = math.sqrt(value)
+    vectors_per_token = int(len(data[step]) / DIMS_PER_VECTOR)  # ie: 1, 3, 10, etc
+    value = math.sqrt(value) / vectors_per_token
     return value
 
 
