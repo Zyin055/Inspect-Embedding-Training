@@ -64,6 +64,8 @@ VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
 * `--file` The "EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
 
 ## Changelog
+#### 1/13/2023
+* Fixed the vector magnitude reporting the incorrect value for embeddings with more than 1 vector per token
 #### 1/01/2023
 * Added `--file` launch arg to inspect an individual embedding file to get its internal info: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
 * Now displays the average vector's strength/magnitude in the console and right hand side of the graph
