@@ -62,8 +62,11 @@ VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
 * `--dir` The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
 * `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
 * `--file` The "EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
+* `--folder` The "/path/to/a/folder/with/embeddings" to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder.
 
 ## Changelog
+#### 1/17/2023
+* Added `--folder` launch arg to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder
 #### 1/13/2023
 * Fixed the vector magnitude reporting the incorrect value for embeddings with more than 1 vector per token
 #### 1/01/2023
