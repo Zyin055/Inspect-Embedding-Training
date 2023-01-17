@@ -38,7 +38,7 @@ working_dir: str = BASEDIR   # where we look for embeddings
 
 def parse_args(argv) -> None:
     try:
-        opts, args = getopt.getopt(argv[1:], "h", ["help", "dir=", "out=", "file="])
+        opts, args = getopt.getopt(argv[1:], "h", ["help", "dir=", "out=", "file=", "folder="])
     except getopt.GetoptError as e:
         sys.exit(e)
 
@@ -65,6 +65,10 @@ def parse_args(argv) -> None:
         elif opt == "--file":
             embedding_file_name = arg
             inspect_embedding_file(embedding_file_name)
+            sys.exit(0)
+        elif opt == "--folder":
+            embedding_folder_name = arg
+            inspect_embedding_folder(embedding_folder_name)
             sys.exit(0)
 
 
@@ -107,6 +111,35 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
     print(f"  Total training steps: {step}")
     print(f"  Average vector strength: {round(strength, 4)}")
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
+
+
+def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000) -> None:
+    data = {}
+    i = 0
+    try:
+        for embedding_file_name in os.listdir(embedding_folder_name):  # "EmbedName-500.pt"
+            if not embedding_file_name.endswith(".pt"):
+                continue
+
+            embed_path = os.path.join(embedding_folder_name, embedding_file_name)
+            _, _, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
+
+            data[step] = [embedding_file_name, strength, magnitude]
+            i += 1
+
+        if i > 0:
+            #print the table
+            pd.options.display.max_rows = max_rows
+            pd.options.display.float_format = "{:,.4f}".format
+            data = dict(sorted(data.items())) #sort the dict by step
+            df = pd.DataFrame.from_dict(data, orient="index", columns=["Embedding", "Strength", "Magnitude"])
+            print(df)
+        else:
+            print(f"[ERROR] No embedding .pt files found at: {embedding_folder_name}")
+
+    except FileNotFoundError as e:
+        print(f"[ERROR] Folder not found: {embedding_folder_name}.")
+        sys.exit(e)
 
 
 def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[str, Tensor], str, int, str, str, str, int, float, float):
@@ -158,11 +191,11 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
     highest_step = -1
     vector_data = {}
     try:
-        for embed_file_name in os.listdir(embedding_dir):  # "EmbedName-500.pt"
-            if not embed_file_name.endswith(".pt"):
+        for embedding_file_name in os.listdir(embedding_dir):  # "EmbedName-500.pt"
+            if not embedding_file_name.endswith(".pt"):
                 continue
 
-            embed_path = os.path.join(embedding_dir, embed_file_name)
+            embed_path = os.path.join(embedding_dir, embedding_file_name)
             embed = torch.load(embed_path, map_location="cpu")
             #tensors = embed["string_to_param"]["*"]
             #step = embed["step"] + 1  # starts counting at 0, so add 1
@@ -178,7 +211,7 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
 
             if step > highest_step:
                 highest_step = step  # + 1
-                embed_name = embed_file_name  # save the file name with the highest step count
+                embed_name = embedding_file_name  # save the file name with the highest step count
                 #vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
 
             # print(f"Loaded data from embedding: {embed_file_name}")
