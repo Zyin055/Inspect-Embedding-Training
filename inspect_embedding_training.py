@@ -43,6 +43,7 @@ def parse_args(argv) -> None:
         sys.exit(e)
 
     for opt, arg in opts:
+        #print(f"arg={arg}")
         if opt in ("-h", "--help"):
             print("Place this Python file in the textual inversion folder in the specific embedding folder you want to analyze (next to textual_inversion_loss.csv). Optionally, you can use the --dir \"/path/to/folder\" launch argument to specify the folder to use.")
             print("launch args:")
@@ -113,8 +114,8 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
 
 
-def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000) -> None:
-    data = {}
+def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, sorted_column: int = 1) -> None:
+    data = []
     i = 0
     try:
         for embedding_file_name in os.listdir(embedding_folder_name):  # "EmbedName-500.pt"
@@ -124,22 +125,23 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000) -
             embed_path = os.path.join(embedding_folder_name, embedding_file_name)
             _, _, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
 
-            data[step] = [embedding_file_name, strength, magnitude]
+            #data[step] = [embedding_file_name, strength, magnitude]
+            data.append([embedding_file_name, strength, magnitude])
             i += 1
-
-        if i > 0:
-            #print the table
-            pd.options.display.max_rows = max_rows
-            pd.options.display.float_format = "{:,.4f}".format
-            data = dict(sorted(data.items())) #sort the dict by step
-            df = pd.DataFrame.from_dict(data, orient="index", columns=["Embedding", "Strength", "Magnitude"])
-            print(df)
-        else:
-            print(f"[ERROR] No embedding .pt files found at: {embedding_folder_name}")
-
     except FileNotFoundError as e:
         print(f"[ERROR] Folder not found: {embedding_folder_name}.")
         sys.exit(e)
+
+    if i == 0:
+        print(f"[ERROR] No embedding .pt files found at: {embedding_folder_name}")
+        return
+
+    #print the table
+    pd.options.display.max_rows = max_rows
+    pd.options.display.float_format = "{:,.4f}".format
+    data.sort(key=lambda x: x[sorted_column])
+    df = pd.DataFrame(data, columns=["Embedding", "Strength", "Magnitude"])
+    print(df)
 
 
 def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[str, Tensor], str, int, str, str, str, int, float, float):
