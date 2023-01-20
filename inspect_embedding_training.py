@@ -1,3 +1,4 @@
+import copy
 import os
 import csv
 import sys
@@ -22,13 +23,14 @@ SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show a popup with the Loss and V
 GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)   # (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
 GRAPH_SHOW_TITLE: bool = True                 # Adds the embed name at the top of the graphs
 
-VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True                 # Generates a vector graph with all vectors displayed
-VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False             # Generates a vector graph with limited number of vectors displayed
+VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True           # Generates a vector graph with all vectors displayed
+VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False       # Generates a vector graph with limited number of vectors displayed
 VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
+
 
 DIMS_PER_VECTOR = 768
 BASEDIR: str = os.path.realpath(os.path.dirname(__file__))   # the path where this .py file is located, ex "C:\Stable Diffusion\textual_inversion\2022-12-30\EmbedFolderName"
@@ -71,22 +73,6 @@ def parse_args(argv) -> None:
             embedding_folder_name = arg
             inspect_embedding_folder(embedding_folder_name)
             sys.exit(0)
-
-
-
-def multiply_embedding_vectors(embedding_file_name: str, multiplier: float) -> str:
-    embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
-    string_to_token = embed["string_to_token"]
-    token = list(string_to_token.keys())[0]
-
-    #print(f'embed["string_to_param"][token] before = {embed["string_to_param"][token]}')
-    embed["string_to_param"][token] = embed["string_to_param"][token] * multiplier
-    #print(f'embed["string_to_param"][token] after = {embed["string_to_param"][token]}')
-
-    out_file_name = f"{embedding_file_name}_x{multiplier}.pt"
-    torch.save(embed, out_file_name)
-    print(f"Saved: {out_file_name}")
-    return out_file_name
 
 
 def inspect_embedding_file(embedding_file_name: str) -> None:
@@ -185,7 +171,6 @@ def load_textual_inversion_loss_data_from_file(file: str) -> dict[int, dict[str,
         sys.exit()
 
 
-
 def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
     global DIMS_PER_VECTOR
     embed_name = None        # "EmbedName"
@@ -227,8 +212,7 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
 
-    return vector_data, embed_name, highest_step, number_of_embedding_files
-
+    return tensors, vector_data, embed_name, highest_step, number_of_embedding_files
 
 
 def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: str) -> None:
@@ -267,9 +251,21 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
 
 
 def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rate_changes: dict[int, (int, float)], highest_step: int, show_learning_rate: bool, save_img: bool, output_file_name: str, limit_num_vectors: int) -> None:
+
+    # need to get the strength/magnitude BEFORE we truncate the data
+    strength = get_vector_data_strength(data, highest_step)
+    magnitude = get_vector_data_magnitude(data, highest_step)
+
     vectors_shown_text = None
     if 0 < limit_num_vectors < len(data[highest_step]):
         vectors_shown_text = f"{limit_num_vectors} of {len(data[highest_step])} vectors shown"
+
+        # create a copy of the vector data so when we truncate it, it doesn't truncate the original reference
+        data = copy.deepcopy(data)
+
+        # truncate the vector data
+        for step in data:
+            data[step] = data[step][:VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS]
 
     plt.figure(figsize=GRAPH_IMAGE_SIZE)
     plt.plot(pd.DataFrame(data).T.sort_index())
@@ -296,6 +292,8 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
             if len(learn_rate_changes) > 1: #create vertical line only if there is a learning rate change
                 plt.axvline(step, color=(0, 0, 0, 0.4), linestyle="dotted")
 
+
+
     if vectors_shown_text is not None:
         x = (min_x_value + max_x_value) / 2
         y = min_y_value - (max_y_value - min_y_value) * 0.10
@@ -306,12 +304,10 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
         y = (max_y_value - min_y_value) * 1.10 + min_y_value
         plt.text(x, y, title, fontsize="20", ha="center", va="center")
 
-    strength = get_vector_data_strength(data, highest_step)
     x = (max_x_value - min_x_value) * 0.065 + max_x_value
     y = (max_y_value + min_y_value) / 2
     plt.text(x, y, f"Average vector strength:\n{round(strength, 4)}", fontsize="9", ha="center", va="center")
 
-    magnitude = get_vector_data_magnitude(data, highest_step)
     x = (max_x_value - min_x_value) * 0.065 + max_x_value
     y = (max_y_value + min_y_value) / 2 - (max_y_value - min_y_value) * 0.1
     plt.text(x, y, f"Average vector magnitude:\n{round(magnitude, 4)}", fontsize="9", ha="center", va="center")
@@ -322,7 +318,6 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
 
     print(f"  Average vector strength: {round(strength, 4)}")
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
-
 
 
 def get_vector_data_strength(data: dict[int, dict[int, Tensor]], step: int) -> float:
@@ -352,7 +347,7 @@ def main():
 
 
     embeddings_dir = os.path.join(working_dir, "embeddings")
-    vector_data, embed_name, highest_step, number_of_embedding_files = analyze_embedding_files(embeddings_dir)
+    tensors, vector_data, embed_name, highest_step, number_of_embedding_files = analyze_embedding_files(embeddings_dir)
     #print(f"vector_data:")
     #print(vector_data)  # dict{step:[768xDimensions of floats]}
     #print(pd.DataFrame(vector_data).T.sort_index())  # massive amounts of numbers, [step][768 x Dimensions of floats]
@@ -386,11 +381,10 @@ def main():
     #print(f"learn_rate_changes: {learn_rate_changes}")
 
     if SAVE_LOSS_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # loss plot
-        output_file_name = f"{embed_name}-{highest_step}-loss.jpg"
         create_loss_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                          data=textual_inversion_loss_data,
                          save_img=SAVE_LOSS_GRAPH_IMG,
-                         output_file_name=output_file_name)
+                         output_file_name=f"{embed_name}-{highest_step}-loss.jpg")
     else:
         print("Skipping making a loss plot.")
 
@@ -403,12 +397,6 @@ def main():
 
 
     if SAVE_VECTOR_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # vector plot
-        if 0 < VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS < len(vector_data[highest_step]):
-            output_file_name = f"{embed_name}-{highest_step}-vector-({VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}-vector-limit).jpg"
-        else:
-            output_file_name = f"{embed_name}-{highest_step}-vector.jpg"
-
-
 
         if VECTOR_GRAPH_CREATE_FULL_GRAPH:
 
@@ -422,13 +410,14 @@ def main():
                                limit_num_vectors=-1,
                                )
 
+
         if VECTOR_GRAPH_CREATE_LIMITED_GRAPH:
+
             if 0 < VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS < len(vector_data[highest_step]):
-                for step in vector_data:
-                    vector_data[step] = vector_data[step][:VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS]
 
                 create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                                    data=vector_data,
+                                   #data=copied_vector_data,
                                    learn_rate_changes=learn_rate_changes,
                                    highest_step=highest_step,
                                    show_learning_rate=VECTOR_GRAPH_SHOW_LEARNING_RATE,
