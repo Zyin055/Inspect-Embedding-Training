@@ -27,6 +27,8 @@ VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True           # Generates a vector graph
 VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False       # Generates a vector graph with limited number of vectors displayed
 VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
+
+EXPORT_FOLDER_EMBEDDING_TABLE_TO = None               # Saves the table when using the --folder launch arg. Valid values are: None, "xlsx", "csv", "html", "json"
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
@@ -103,6 +105,7 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
 def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, sorted_column: int = 1) -> None:
     data = []
     i = 0
+    final_embedding_file_name = ""
     try:
         for embedding_file_name in os.listdir(embedding_folder_name):  # "EmbedName-500.pt"
             if not embedding_file_name.endswith(".pt"):
@@ -113,6 +116,7 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
 
             #data[step] = [embedding_file_name, strength, magnitude]
             data.append([embedding_file_name, strength, magnitude])
+            final_embedding_file_name = embedding_file_name
             i += 1
     except FileNotFoundError as e:
         print(f"[ERROR] Folder not found: {embedding_folder_name}.")
@@ -128,6 +132,21 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
     data.sort(key=lambda x: x[sorted_column])
     df = pd.DataFrame(data, columns=["Embedding", "Strength", "Magnitude"])
     print(df)
+
+    if EXPORT_FOLDER_EMBEDDING_TABLE_TO is not None:
+        file_extension = EXPORT_FOLDER_EMBEDDING_TABLE_TO.lower()
+        split_tup = os.path.splitext(final_embedding_file_name)
+        file_name = split_tup[0]
+        if file_extension == "xlsx":
+            df.to_excel(f"{file_name}.{file_extension}", sheet_name=file_name, index=False, header=True)
+        elif file_extension == "csv":
+            df.to_csv(f"{file_name}.{file_extension}", index=False, header=True)
+        elif file_extension == "html":
+            df.to_html(f"{file_name}.{file_extension}", index=False, header=True)
+        elif file_extension == "json":
+            df.to_json(f"{file_name}.{file_extension}")
+
+        #df.to_markdown(f"{file_name}.md", index=False, header=True)
 
 
 def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[str, Tensor], str, int, str, str, str, int, float, float):
