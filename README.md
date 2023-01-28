@@ -65,6 +65,8 @@ VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
 * `--folder` The "/path/to/a/folder/with/embeddings" to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder.
 
 ## Changelog
+#### 1/19/2023
+* Fixed an error when rendering the limited vector graph (a bug introduced in the 1/13/2023 update)
 #### 1/17/2023
 * Added `--folder` launch arg to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder
 #### 1/13/2023
