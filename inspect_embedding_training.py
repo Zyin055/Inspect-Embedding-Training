@@ -28,7 +28,7 @@ VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False       # Generates a vector graph
 VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
 
-EXPORT_FOLDER_EMBEDDING_TABLE_TO = None               # Saves the table when using the --folder launch arg. Valid values are: None, "xlsx", "csv", "html", "json"
+EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None               # Saves the table when using the --folder launch arg. If you get a ModuleNotFoundError: No module named 'openpyxl', then try running: pip install openpyxl     Valid values are: None, "xlsx", "csv", "html", "json"
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
