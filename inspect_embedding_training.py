@@ -34,7 +34,7 @@ EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None               # Saves the table whe
 #######################################################################################################################
 
 
-DIMS_PER_VECTOR = 768
+DIMS_PER_VECTOR = 768 # SD 1.5 has 768, 2.X has more
 BASEDIR: str = os.path.realpath(os.path.dirname(__file__))   # the path where this .py file is located, ex "C:\Stable Diffusion\textual_inversion\2022-12-30\EmbedFolderName"
 output_dir: str = BASEDIR    # where the output graph images are saved
 working_dir: str = BASEDIR   # where we look for embeddings
@@ -180,14 +180,33 @@ def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[s
     return string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength
 
 
-def load_textual_inversion_loss_data_from_file(file: str) -> dict[int, dict[str, str]]:
-    if os.path.isfile(file):
-        with open(file) as metadata_file:
+def load_textual_inversion_loss_data_from_file(loss_csv_file: str) -> dict[int, dict[str, str]]:
+    if os.path.isfile(loss_csv_file):
+        with open(loss_csv_file) as metadata_file:
             return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
     else:
-        print(f"[ERROR] Could not find file: {file}")
+        print(f"[ERROR] Could not find file: {loss_csv_file}")
         print("This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
         sys.exit()
+
+
+def get_learn_rate_changes(textual_inversion_loss_data):
+    learn_rate_changes = {}  # dict[index: int, (step: int, learn rate: float)]
+    last_learn_rate = -1
+    new_i = 0
+    for step in textual_inversion_loss_data:
+        new_learn_rate = textual_inversion_loss_data[step]["learn_rate"]
+        # print(f"step {step} -> {new_learn_rate} learn rate")
+        if last_learn_rate != new_learn_rate:
+            learn_rate_changes[new_i] = (step, float(new_learn_rate))
+            last_learn_rate = new_learn_rate
+
+            print(f"Learning rate at step {step}: {learn_rate_changes[new_i][1]}")
+            new_i += 1
+    if len(learn_rate_changes) == 1:
+        learn_rate_changes[0] = (0, learn_rate_changes[0][
+            1])  # only 1 learning rate change, set starting step to 0. makes the Learn rate label centered
+    return learn_rate_changes
 
 
 def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
@@ -291,16 +310,16 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
     min_y_value, max_y_value = plt.gca().get_ylim()
     min_x_value, max_x_value = plt.gca().get_xlim()
 
-    # plot the Learn rate: XX labels and lines
-    for i in learn_rate_changes:
-        #print(f"i={i}, len(learn_rate_changes)={len(learn_rate_changes)}")
-        step, learn_rate = learn_rate_changes[i]
-        nextStep = highest_step
-        if i < len(learn_rate_changes) - 1:
-            nextStep = learn_rate_changes[i+1][0]
+    if show_learning_rate:
+        # plot the Learn rate: XX labels and lines
+        for i in learn_rate_changes:
+            #print(f"i={i}, len(learn_rate_changes)={len(learn_rate_changes)}")
+            step, learn_rate = learn_rate_changes[i]
+            nextStep = highest_step
+            if i < len(learn_rate_changes) - 1:
+                nextStep = learn_rate_changes[i+1][0]
 
-        #print(f"step={step}, nextStep={nextStep}")
-        if show_learning_rate:
+            #print(f"step={step}, nextStep={nextStep}")
             x = (step + nextStep) / 2
             y = (max_y_value - min_y_value) * 1.03 + min_y_value
             # if i % 2 == 1:
@@ -371,35 +390,18 @@ def main():
     #print(vector_data)  # dict{step:[768xDimensions of floats]}
     #print(pd.DataFrame(vector_data).T.sort_index())  # massive amounts of numbers, [step][768 x Dimensions of floats]
 
-
-    print("Generating graphs...")
-
-
-    loss_csv_file = os.path.join(working_dir, "textual_inversion_loss.csv")
-    textual_inversion_loss_data = load_textual_inversion_loss_data_from_file(loss_csv_file)
-    #print(f"textual_inversion_loss_data:")
-    #print(textual_inversion_loss_data)
-    #print(pd.DataFrame(textual_inversion_loss_data).T.sort_index())   # the same format as the textual_inversion_loss.csv file
-
-    learn_rate_changes = {} # dict[index: int, (step: int, learn rate: float)]
-    last_learn_rate = -1
-    new_i = 0
-    for step in textual_inversion_loss_data:
-        new_learn_rate = textual_inversion_loss_data[step]["learn_rate"]
-        #print(f"step {step} -> {new_learn_rate} learn rate")
-        if last_learn_rate != new_learn_rate:
-            learn_rate_changes[new_i] = (step, float(new_learn_rate))
-            last_learn_rate = new_learn_rate
-
-            print(f"Learning rate at step {step}: {learn_rate_changes[new_i][1]}")
-            new_i += 1
-
-    if len(learn_rate_changes) == 1:
-        learn_rate_changes[0] = (0, learn_rate_changes[0][1])    # only 1 learning rate change, set starting step to 0. makes the Learn rate label centered
+    textual_inversion_loss_data = None  # this is loaded only if needed later on
 
     #print(f"learn_rate_changes: {learn_rate_changes}")
+    print("Generating graphs...")
 
     if SAVE_LOSS_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # loss plot
+        if textual_inversion_loss_data is None:
+            textual_inversion_loss_data = load_textual_inversion_loss_data_from_file(os.path.join(working_dir, "textual_inversion_loss.csv"))
+            #print(f"textual_inversion_loss_data:")
+            #print(textual_inversion_loss_data)
+            #print(pd.DataFrame(textual_inversion_loss_data).T.sort_index())   # the same format as the textual_inversion_loss.csv file
+
         create_loss_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                          data=textual_inversion_loss_data,
                          save_img=SAVE_LOSS_GRAPH_IMG,
@@ -416,6 +418,12 @@ def main():
 
 
     if SAVE_VECTOR_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # vector plot
+
+        learn_rate_changes = {}
+        if VECTOR_GRAPH_SHOW_LEARNING_RATE:
+            if textual_inversion_loss_data is None:
+                textual_inversion_loss_data = load_textual_inversion_loss_data_from_file(os.path.join(working_dir, "textual_inversion_loss.csv"))
+            learn_rate_changes = get_learn_rate_changes(textual_inversion_loss_data)
 
         if VECTOR_GRAPH_CREATE_FULL_GRAPH:
 
