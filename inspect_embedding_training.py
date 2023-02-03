@@ -215,9 +215,14 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
     number_of_embedding_files = 0
     highest_step = -1
     vector_data = {}
+    num_skipped_neg_files = 0
     try:
         for embedding_file_name in os.listdir(embedding_dir):  # "EmbedName-500.pt"
             if not embedding_file_name.endswith(".pt"):
+                continue
+
+            if embedding_file_name.endswith("-neg.pt"):
+                num_skipped_neg_files += 1
                 continue
 
             embed_path = os.path.join(embedding_dir, embedding_file_name)
@@ -249,6 +254,10 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
     embed_name = embed_name.replace(".pt", "")[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XX.pt" off the end
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
+
+    if num_skipped_neg_files > 0:
+        # DreamArtist extension creates a "EmbedName-XXXX-neg.pt" file along with the usual "EmbedName-XXXX.pt" file, so we ignore the "-neg.pt" files
+        print(f"Skipped {num_skipped_neg_files} files that ended with \"-neg.pt\"")
 
     return tensors, vector_data, embed_name, highest_step, number_of_embedding_files
 
