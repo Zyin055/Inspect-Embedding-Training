@@ -180,14 +180,21 @@ def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[s
     return string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength
 
 
-def load_textual_inversion_loss_data_from_file(loss_csv_file: str) -> dict[int, dict[str, str]]:
+def load_textual_inversion_loss_data_from_file() -> dict[int, dict[str, str]]:
+    loss_csv_file = os.path.join(working_dir, "textual_inversion_loss.csv") # the default name created by Automatic1111
     if os.path.isfile(loss_csv_file):
         with open(loss_csv_file) as metadata_file:
             return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
-    else:
-        print(f"[ERROR] Could not find file: {loss_csv_file}")
-        print("This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
-        sys.exit()
+
+    loss_csv_file = os.path.join(working_dir, "prompt_tuning_loss.csv") # alternate name created by DreamArtist
+    if os.path.isfile(loss_csv_file):
+        print(f"Found prompt_tuning_loss.csv, loading that instead of textual_inversion_loss.csv")
+        with open(loss_csv_file) as metadata_file:
+            return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
+
+    print(f"[ERROR] Could not find file: textual_inversion_loss.csv")
+    print("This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
+    sys.exit()
 
 
 def get_learn_rate_changes(textual_inversion_loss_data):
@@ -406,7 +413,7 @@ def main():
 
     if SAVE_LOSS_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # loss plot
         if textual_inversion_loss_data is None:
-            textual_inversion_loss_data = load_textual_inversion_loss_data_from_file(os.path.join(working_dir, "textual_inversion_loss.csv"))
+            textual_inversion_loss_data = load_textual_inversion_loss_data_from_file()
             #print(f"textual_inversion_loss_data:")
             #print(textual_inversion_loss_data)
             #print(pd.DataFrame(textual_inversion_loss_data).T.sort_index())   # the same format as the textual_inversion_loss.csv file
@@ -431,7 +438,7 @@ def main():
         learn_rate_changes = {}
         if VECTOR_GRAPH_SHOW_LEARNING_RATE:
             if textual_inversion_loss_data is None:
-                textual_inversion_loss_data = load_textual_inversion_loss_data_from_file(os.path.join(working_dir, "textual_inversion_loss.csv"))
+                textual_inversion_loss_data = load_textual_inversion_loss_data_from_file()
             learn_rate_changes = get_learn_rate_changes(textual_inversion_loss_data)
 
         if VECTOR_GRAPH_CREATE_FULL_GRAPH:
