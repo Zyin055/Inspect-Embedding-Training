@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import copy
 import os
 import csv
@@ -216,8 +214,8 @@ def decode_a1111_embedding(embed: dict):
     string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
     internal_name = embed["name"]               #EmbedTest
     step = embed["step"] + 1                    #1000
-    sd_checkpoint_hash = embed["sd_checkpoint"] or "" #a9263745
-    sd_checkpoint_name = embed["sd_checkpoint_name"] or ""   #v1-5-pruned
+    sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
+    sd_checkpoint_name = embed["sd_checkpoint_name"]   #v1-5-pruned
     token = list(string_to_token.keys())[0]  #"*"
 
     if file_extension == ".pt":
