@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import copy
 import os
 import csv
@@ -128,7 +130,6 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
 
     if i == 0:
         print(f"[ERROR] No embedding files found at: {embedding_folder_name}")
-        return
 
     #print the table
     pd.options.display.max_rows = max_rows
@@ -152,12 +153,22 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
 
         #df.to_markdown(f"{file_name}.md", index=False, header=True)
 
+def is_safetensors(embedding_file_name): 
+    return embedding_file_name.endswith(".safetensors")
 
 def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, str, Tensor, int, float, float):
     global DIMS_PER_VECTOR
 
     try:
-        embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+        if is_safetensors(embedding_file_name):
+            try:
+                from safetensors.torch import load_file
+            except ImportError as e:
+                raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
+            embed =  load_file(embedding_file_name, device="cpu")
+        else:
+            embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+
     except FileNotFoundError as e:
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
@@ -179,6 +190,35 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     magnitude = None
     strength = None
     vectors_per_token = None
+    if "string_to_token" in embed.keys():
+        return decode_a1111_embedding(embed)
+    else:
+        return decode_kohya_ss_embedding(embed)
+
+
+def decode_kohya_ss_embedding(embed: dict):
+    vector_data = {}
+    # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
+    tensors = embed["emb_params"]
+    step = 500
+    vector_data = torch.flatten(tensors).tolist()
+    tensors = embed["string_to_param"][token]
+    magnitude = get_vector_data_magnitude(vector_data)
+    strength = get_vector_data_strength(vector_data)
+    vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
+
+    return {}, {}, "", step, "", "", "", vectors_per_token, magnitude, strength
+
+
+def decode_a1111_embedding(embed: dict):
+    vector_data = {}
+    string_to_token = embed["string_to_token"]  #{'*': 265}
+    string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
+    internal_name = embed["name"]               #EmbedTest
+    step = embed["step"] + 1                    #1000
+    sd_checkpoint_hash = embed["sd_checkpoint"] or "" #a9263745
+    sd_checkpoint_name = embed["sd_checkpoint_name"] or ""   #v1-5-pruned
+    token = list(string_to_token.keys())[0]  #"*"
 
     if file_extension == ".pt":
         # .pt extension, created by Automatic1111
@@ -262,6 +302,22 @@ def get_learn_rate_changes(textual_inversion_loss_data):
     return learn_rate_changes
 
 
+def is_embedding_file(embedding_file_name: str):
+    return (
+        not embedding_file_name.endswith(".pt")
+        and not embedding_file_name.endswith(".safetensors")
+        and not not embedding_file_name.endswith(".bin")
+    )
+
+
+def remove_file_extension(embedding_file_name: str):
+    return (
+        embedding_file_name.replace(".pt", "")
+        .replace(".safetensors", "")
+        .replace(".bin", "")
+    )
+
+
 def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
     global DIMS_PER_VECTOR
     embed_name = None        # "EmbedName"
@@ -306,8 +362,11 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
         print("[ERROR] Make sure to place this Python file in the textual inversion folder in the specific embedding folder you want to analyze (next to textual_inversion_loss.csv). Optionally, you can use the --dir \"/path/to/embedding/folder\" launch argument to specify the folder to use.")
         sys.exit(e)
 
+    if embed_name is None:
+        raise RuntimeError("Could not find an embedding")
+
     vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
-    embed_name = embed_name.replace(".pt", "").replace(".bin", "")[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
+    embed_name = remove_file_extension(embed_name)[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
 
@@ -441,7 +500,12 @@ def get_vector_data_magnitude(data: dict[int, Tensor]) -> float:
 
 
 def is_embedding_file_extension(file_extension: str) -> bool:
-    return file_extension == ".pt" or file_extension == ".bin"
+    return (
+        file_extension == ".pt"
+        or file_extension == ".bin"
+        or file_extension == ".safetensors"
+        or file_extension == ".ckpt"
+    )
 
 
 def main():
