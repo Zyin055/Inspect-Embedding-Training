@@ -28,7 +28,7 @@ VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False       # Generates a vector graph
 VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
 VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
 
-EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None               # Saves the table when using the --folder launch arg. If you get a ModuleNotFoundError: No module named 'openpyxl', then try running: pip install openpyxl     Valid values are: None, "xlsx", "csv", "html", "json"
+EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None          # Saves the table when using the --folder launch arg. Valid values are: None, "xlsx", "csv", "html", "json". If you get a ModuleNotFoundError: No module named 'openpyxl', then try running: pip install openpyxl
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
@@ -83,13 +83,14 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
     file_extension = split_tup[1]
 
     if file_extension == "":
+        print(f"No file extension supplied for '{embedding_file_name}', assuming it has a .pt file extension.")
         embedding_file_name = embedding_file_name + ".pt"   #fix user error, add file extension
 
-    elif file_extension != ".pt":
-        print(f"[ERROR] '{embedding_file_name}' is not a .pt file.")
+    elif not is_embedding_file_extension(file_extension):
+        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt or .bin).")
         sys.exit(1)
 
-    _, _, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
+    internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
 
     print(f"Data for embedding file: {embedding_file_name}")
     print(f"  Internal name: {internal_name}")
@@ -108,11 +109,14 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
     final_embedding_file_name = ""
     try:
         for embedding_file_name in os.listdir(embedding_folder_name):  # "EmbedName-500.pt"
-            if not embedding_file_name.endswith(".pt"):
+            split_tup = os.path.splitext(embedding_file_name)
+            #file_name = split_tup[0]
+            file_extension = split_tup[1]
+            if not is_embedding_file_extension(file_extension):
                 continue
 
             embed_path = os.path.join(embedding_folder_name, embedding_file_name)
-            _, _, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
+            internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
 
             #data[step] = [embedding_file_name, strength, magnitude]
             data.append([embedding_file_name, strength, magnitude])
@@ -123,7 +127,7 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
         sys.exit(e)
 
     if i == 0:
-        print(f"[ERROR] No embedding .pt files found at: {embedding_folder_name}")
+        print(f"[ERROR] No embedding files found at: {embedding_folder_name}")
         return
 
     #print the table
@@ -149,35 +153,61 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
         #df.to_markdown(f"{file_name}.md", index=False, header=True)
 
 
-def get_embedding_file_data(embedding_file_name: str) -> (dict[str, int], dict[str, Tensor], str, int, str, str, str, int, float, float):
+def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, str, Tensor, int, float, float):
     global DIMS_PER_VECTOR
 
     try:
-        #embed = torch.load(embedding_file_name, map_location="cpu")
         embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
-
     except FileNotFoundError as e:
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
 
+    #for k,v in embed.items():
+    #    print(k,v) # debug to see what values are in the embedding
+
+    split_tup = os.path.splitext(embedding_file_name)
+    #file_name = split_tup[0]
+    file_extension = split_tup[1]
+
     vector_data = {}
-    string_to_token = embed["string_to_token"]  #{'*': 265}
-    string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
-    internal_name = embed["name"]               #EmbedTest
-    step = embed["step"] + 1                    #1000
-    sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
-    sd_checkpoint_name = embed["sd_checkpoint_name"]    #v1-5-pruned
-    token = list(string_to_token.keys())[0]  #"*"
+    internal_name = None
+    step = None
+    sd_checkpoint_hash = None
+    sd_checkpoint_name = None
+    token = None
+    tensors = None
+    vectors_per_token = None
+    magnitude = None
+    strength = None
 
-    tensors = embed["string_to_param"][token]
-    #step = embed["step"] + 1  # starts counting at 0, so add 1
-    vector_data[step] = torch.flatten(tensors).tolist()
-    magnitude = get_vector_data_magnitude(vector_data, step)
-    strength = get_vector_data_strength(vector_data, step)
-    vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
+    if file_extension == ".pt":
+        # .pt extension, created by Automatic1111
+        # has additional data: internal name, step, checkpoint hash/name, token
+        # tensors are in the string_to_param key/value pair
+        string_to_token = embed["string_to_token"]  #{'*': 265}
+        string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
+        internal_name = embed["name"]               #EmbedTest
+        step = embed["step"] + 1                    #1000
+        sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
+        sd_checkpoint_name = embed["sd_checkpoint_name"]    #v1-5-pruned
+        token = list(string_to_token.keys())[0]     #"*"
 
+        tensors = embed["string_to_param"][token]
+        vector_data = torch.flatten(tensors).tolist()
+        magnitude = get_vector_data_magnitude(vector_data)
+        strength = get_vector_data_strength(vector_data)
+        vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
+    elif file_extension == ".bin":
+        # .bin extension
+        # has no additional data
+        # has a single key/value pair with the tensors
+        tensors = next(iter(embed.items()))[1]          #get the first and only element in the embed dict - "<EmbedName>": tensor([...])
+        vector_data = torch.flatten(tensors).tolist()
+        magnitude = get_vector_data_magnitude(vector_data)
+        strength = get_vector_data_strength(vector_data)
+        vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    return string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength
+    return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
 
 
 def load_textual_inversion_loss_data_from_file() -> dict[int, dict[str, str]]:
@@ -225,10 +255,13 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
     num_skipped_neg_files = 0
     try:
         for embedding_file_name in os.listdir(embedding_dir):  # "EmbedName-500.pt"
-            if not embedding_file_name.endswith(".pt"):
+            split_tup = os.path.splitext(embedding_file_name)
+            # file_name = split_tup[0]
+            file_extension = split_tup[1]
+            if not is_embedding_file_extension(file_extension):
                 continue
 
-            if embedding_file_name.endswith("-neg.pt"):
+            if embedding_file_name.endswith("-neg.pt"): # from the DreamArtist extension
                 num_skipped_neg_files += 1
                 continue
 
@@ -239,8 +272,8 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
             #vector_data[step] = torch.flatten(tensors).tolist()
             #number_of_embedding_files += 1
 
-            string_to_token, string_to_param, internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
-            tensors = embed["string_to_param"][token]
+            internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
+            #tensors = embed["string_to_param"][token]
             vector_data[step] = torch.flatten(tensors).tolist()
             number_of_embedding_files += 1
 
@@ -258,7 +291,7 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
         sys.exit(e)
 
     vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
-    embed_name = embed_name.replace(".pt", "")[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XX.pt" off the end
+    embed_name = embed_name.replace(".pt", "").replace(".bin", "")[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
 
@@ -307,8 +340,8 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
 def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rate_changes: dict[int, (int, float)], highest_step: int, show_learning_rate: bool, save_img: bool, output_file_name: str, limit_num_vectors: int) -> None:
 
     # need to get the strength/magnitude BEFORE we truncate the data
-    strength = get_vector_data_strength(data, highest_step)
-    magnitude = get_vector_data_magnitude(data, highest_step)
+    strength = get_vector_data_strength(data[highest_step])
+    magnitude = get_vector_data_magnitude(data[highest_step])
 
     vectors_shown_text = None
     if 0 < limit_num_vectors < len(data[highest_step]):
@@ -374,21 +407,25 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
 
 
-def get_vector_data_strength(data: dict[int, dict[int, Tensor]], step: int) -> float:
+def get_vector_data_strength(data: dict[int, Tensor]) -> float:
     value = 0
-    for n in data[step]:
+    for n in data:
         value += abs(n)
-    value = value / len(data[step]) # the average value of each vector (ignoring negative values)
+    value = value / len(data) # the average value of each vector (ignoring negative values)
     return value
 
 
-def get_vector_data_magnitude(data: dict[int, dict[int, Tensor]], step: int) -> float:
+def get_vector_data_magnitude(data: dict[int, Tensor]) -> float:
     value = 0
-    for n in data[step]:
+    for n in data:
         value += pow(n, 2)
-    vectors_per_token = int(len(data[step]) / DIMS_PER_VECTOR)  # ie: 1, 3, 10, etc
+    vectors_per_token = int(len(data) / DIMS_PER_VECTOR)  # ie: 1, 3, 10, etc
     value = math.sqrt(value) / vectors_per_token
     return value
+
+
+def is_embedding_file_extension(file_extension: str) -> bool:
+    return file_extension == ".pt" or file_extension == ".bin"
 
 
 def main():
@@ -427,7 +464,7 @@ def main():
 
 
     if number_of_embedding_files == 0:
-        print(f"[ERROR] Could not find any embedding .pt files in {embeddings_dir}")
+        print(f"[ERROR] Could not find any embedding files in {embeddings_dir}")
         sys.exit()
     elif number_of_embedding_files == 1:
         print("[WARNING] Only 1 embedding file found, the vector plot won't show any useful data.")
