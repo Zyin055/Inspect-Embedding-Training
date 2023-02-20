@@ -162,50 +162,66 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
 
-    #for k,v in embed.items():
-    #    print(k,v) # debug to see what values are in the embedding
+    # for k,v in embed.items():
+    #     print(k,v) # debug to see what values are in the embedding
 
     split_tup = os.path.splitext(embedding_file_name)
     #file_name = split_tup[0]
     file_extension = split_tup[1]
 
-    vector_data = {}
     internal_name = None
     step = None
     sd_checkpoint_hash = None
     sd_checkpoint_name = None
     token = None
     tensors = None
-    vectors_per_token = None
+    vector_data = {}
     magnitude = None
     strength = None
+    vectors_per_token = None
 
     if file_extension == ".pt":
         # .pt extension, created by Automatic1111
         # has additional data: internal name, step, checkpoint hash/name, token
         # tensors are in the string_to_param key/value pair
-        string_to_token = embed["string_to_token"]  #{'*': 265}
-        string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
-        internal_name = embed["name"]               #EmbedTest
-        step = embed["step"] + 1                    #1000
-        sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
-        sd_checkpoint_name = embed["sd_checkpoint_name"]    #v1-5-pruned
-        token = list(string_to_token.keys())[0]     #"*"
 
+        if embed["string_to_token"] is None or embed["string_to_param"] is None:
+            print(f"Could not find the tensors inside of {embedding_file_name}. The internal data format is not recognized.")
+            sys.exit()
+
+        internal_name = embed["name"]                                                               #EmbedTest
+        step = embed["step"] + 1 if embed["step"] else None                                         #1000
+        sd_checkpoint_hash = embed["sd_checkpoint"] if embed["sd_checkpoint"] else None             #a9263745
+        sd_checkpoint_name = embed["sd_checkpoint_name"] if embed["sd_checkpoint_name"] else None   #v1-5-pruned
+
+        string_to_token = embed["string_to_token"]  #{'*': 265}
+        #string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178, ..., -0.0294], [-0.0085, ...,  0.0757]], requires_grad=True)}
+        token = list(string_to_token.keys())[0]     #"*"
         tensors = embed["string_to_param"][token]
         vector_data = torch.flatten(tensors).tolist()
         magnitude = get_vector_data_magnitude(vector_data)
         strength = get_vector_data_strength(vector_data)
         vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
+
     elif file_extension == ".bin":
         # .bin extension
         # has no additional data
         # has a single key/value pair with the tensors
+
+        if len(embed.items()) > 1:
+            print(f"{embedding_file_name} has additional internal data that hasn't been parsed:")
+            for k, v in embed.items():
+                print(f"  {k}: {v}") # to show the user what extra values are stored in the embedding
+
+        # we hope that if any extra data is in the .bin file that it comes after the tensors at position 1
         tensors = next(iter(embed.items()))[1]          #get the first and only element in the embed dict - "<EmbedName>": tensor([...])
         vector_data = torch.flatten(tensors).tolist()
         magnitude = get_vector_data_magnitude(vector_data)
         strength = get_vector_data_strength(vector_data)
         vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
+
+    else:
+        print(f"Embedding {embedding_file_name} has an unrecognized file extension: '{file_extension}'")
 
     return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
 
