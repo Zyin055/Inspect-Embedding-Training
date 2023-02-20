@@ -67,6 +67,8 @@ EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None
 * `--folder` The "/path/to/a/folder/with/embeddings" to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder.
 
 ## Changelog
+#### 2/19/2023
+* Added support for .bin embedding file format
 #### 2/04/2023
 * Will load `prompt_tuning_loss.csv` if it exists, which is created when using DreamArtist
 #### 2/03/2023
