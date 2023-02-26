@@ -87,7 +87,7 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
         embedding_file_name = embedding_file_name + ".pt"   #fix user error, add file extension
 
     elif not is_embedding_file_extension(file_extension):
-        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt or .bin).")
+        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt .bin .safetensors .ckpt).")
         sys.exit(1)
 
     internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
@@ -128,7 +128,6 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
 
     if i == 0:
         print(f"[ERROR] No embedding files found at: {embedding_folder_name}")
-        return
 
     #print the table
     pd.options.display.max_rows = max_rows
@@ -153,17 +152,63 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
         #df.to_markdown(f"{file_name}.md", index=False, header=True)
 
 
+def is_safetensors(embedding_file_name): 
+    return embedding_file_name.endswith(".safetensors")
+
+
 def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, str, Tensor, int, float, float):
     global DIMS_PER_VECTOR
 
+    embed = {}
+    metadata = {}
     try:
-        embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+        if is_safetensors(embedding_file_name):
+            try:
+                from safetensors import safe_open 
+            except ImportError as e:
+                raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
+
+            with safe_open(embedding_file_name, framework="pt", device="cpu") as embed_safetensor:
+                for k in embed_safetensor.keys():
+                    embed[k] = embed_safetensor.get_tensor(k)
+                metadata = embed_safetensor.metadata() or {}
+        else:
+            embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+            metadata = embed
+
     except FileNotFoundError as e:
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
 
     # for k,v in embed.items():
     #     print(k,v) # debug to see what values are in the embedding
+
+    if "emb_params" in embed.keys():
+        return decode_kohya_ss_embedding(embed, metadata)
+    else:
+        return decode_a1111_embedding(embed, embedding_file_name)
+
+
+def decode_kohya_ss_embedding(embed: dict, metadata: dict):
+    global DIMS_PER_VECTOR
+
+    tensors = embed["emb_params"]   # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
+    vector_data = torch.flatten(tensors).tolist()
+    magnitude = get_vector_data_magnitude(vector_data)
+    strength = get_vector_data_strength(vector_data)
+    vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
+
+    internal_name = metadata.get("ss_output_name", None)
+    step = metadata.get("ss_max_train_steps", None)
+    sd_checkpoint_hash = metadata.get("sshs_model_hash", None)
+    sd_checkpoint_name = metadata.get("ss_sd_model_name", None)
+    token = None
+
+    return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
+
+
+def decode_a1111_embedding(embed: dict, embedding_file_name: str):
+    global DIMS_PER_VECTOR
 
     split_tup = os.path.splitext(embedding_file_name)
     #file_name = split_tup[0]
@@ -175,12 +220,11 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     sd_checkpoint_name = None
     token = None
     tensors = None
-    vector_data = {}
     magnitude = None
     strength = None
     vectors_per_token = None
 
-    if file_extension == ".pt":
+    if "string_to_token" in embed:
         # .pt extension, created by Automatic1111
         # has additional data: internal name, step, checkpoint hash/name, token
         # tensors are in the string_to_param key/value pair
@@ -262,6 +306,15 @@ def get_learn_rate_changes(textual_inversion_loss_data):
     return learn_rate_changes
 
 
+def remove_file_extension(embedding_file_name: str):
+    return (
+        embedding_file_name.replace(".pt", "")
+        .replace(".safetensors", "")
+        .replace(".bin", "")
+        .replace(".ckpt", "")
+    )
+
+
 def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
     global DIMS_PER_VECTOR
     embed_name = None        # "EmbedName"
@@ -282,7 +335,7 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
                 continue
 
             embed_path = os.path.join(embedding_dir, embedding_file_name)
-            embed = torch.load(embed_path, map_location="cpu")
+            #embed = torch.load(embed_path, map_location="cpu")
             #tensors = embed["string_to_param"]["*"]
             #step = embed["step"] + 1  # starts counting at 0, so add 1
             #vector_data[step] = torch.flatten(tensors).tolist()
@@ -306,8 +359,11 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
         print("[ERROR] Make sure to place this Python file in the textual inversion folder in the specific embedding folder you want to analyze (next to textual_inversion_loss.csv). Optionally, you can use the --dir \"/path/to/embedding/folder\" launch argument to specify the folder to use.")
         sys.exit(e)
 
+    if embed_name is None:
+        raise RuntimeError("Could not find an embedding")
+
     vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
-    embed_name = embed_name.replace(".pt", "").replace(".bin", "")[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
+    embed_name = remove_file_extension(embed_name)[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
 
@@ -441,7 +497,12 @@ def get_vector_data_magnitude(data: dict[int, Tensor]) -> float:
 
 
 def is_embedding_file_extension(file_extension: str) -> bool:
-    return file_extension == ".pt" or file_extension == ".bin"
+    return (
+        file_extension == ".pt"
+        or file_extension == ".bin"
+        or file_extension == ".safetensors"
+        or file_extension == ".ckpt"
+    )
 
 
 def main():
