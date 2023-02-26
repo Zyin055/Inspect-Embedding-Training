@@ -165,13 +165,11 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
                 raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
 
             embed = {}
-            metadata = None
+            metadata = {}
             with safe_open(embedding_file_name, framework="pt", device="cpu") as f:
                 for k in f.keys():
                     embed[k] = f.get_tensor(k)
-                metadata = f.metadata()
-            if metadata is None:
-                print("We could not find enough metadata from this safetensors file")
+                metadata = f.metadata() or {}
         else:
             embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
             metadata = embed
@@ -197,10 +195,10 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     magnitude = None
     strength = None
     vectors_per_token = None
-    if "string_to_token" in embed.keys():
-        return decode_a1111_embedding(embed)
-    else:
+    if "emb_params" in embed.keys():
         return decode_kohya_ss_embedding(embed, metadata)
+    else:
+        return decode_a1111_embedding(embed)
 
 
 def decode_kohya_ss_embedding(embed: dict, metadata: dict):
