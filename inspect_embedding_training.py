@@ -209,12 +209,11 @@ def decode_kohya_ss_embedding(embed: dict, metadata: dict):
     tensors = embed["emb_params"]
     step = 500
     vector_data = torch.flatten(tensors).tolist()
-    tensors = embed["string_to_param"][token]
     magnitude = get_vector_data_magnitude(vector_data)
     strength = get_vector_data_strength(vector_data)
-    vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
+    vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    return {}, {}, metadata.get("ss_output_name", ""), step, metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), vectors_per_token, magnitude, strength
+    return metadata.get("ss_output_name", ""), step, metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), tensors, vectors_per_token, magnitude, strength
 
 
 def decode_a1111_embedding(embed: dict):
