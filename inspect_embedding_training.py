@@ -87,7 +87,7 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
         embedding_file_name = embedding_file_name + ".pt"   #fix user error, add file extension
 
     elif not is_embedding_file_extension(file_extension):
-        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt or .bin).")
+        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt .bin .safetensors .ckpt).")
         sys.exit(1)
 
     internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
@@ -160,12 +160,21 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     try:
         if is_safetensors(embedding_file_name):
             try:
-                from safetensors.torch import load_file
+                from safetensors import safe_open 
             except ImportError as e:
                 raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
-            embed =  load_file(embedding_file_name, device="cpu")
+
+            embed = {}
+            metadata = None
+            with safe_open(embedding_file_name, framework="pt", device="cpu") as f:
+                for k in f.keys():
+                    embed[k] = f.get_tensor(k)
+                metadata = f.metadata()
+            if metadata is None:
+                print("We could not find enough metadata from this safetensors file")
         else:
             embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
+            metadata = embed
 
     except FileNotFoundError as e:
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
@@ -191,10 +200,10 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     if "string_to_token" in embed.keys():
         return decode_a1111_embedding(embed)
     else:
-        return decode_kohya_ss_embedding(embed)
+        return decode_kohya_ss_embedding(embed, metadata)
 
 
-def decode_kohya_ss_embedding(embed: dict):
+def decode_kohya_ss_embedding(embed: dict, metadata: dict):
     vector_data = {}
     # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
     tensors = embed["emb_params"]
@@ -205,7 +214,7 @@ def decode_kohya_ss_embedding(embed: dict):
     strength = get_vector_data_strength(vector_data)
     vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
 
-    return {}, {}, "", step, "", "", "", vectors_per_token, magnitude, strength
+    return {}, {}, metadata.get("ss_output_name", ""), step, metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), vectors_per_token, magnitude, strength
 
 
 def decode_a1111_embedding(embed: dict):
@@ -304,7 +313,8 @@ def is_embedding_file(embedding_file_name: str):
     return (
         not embedding_file_name.endswith(".pt")
         and not embedding_file_name.endswith(".safetensors")
-        and not not embedding_file_name.endswith(".bin")
+        and not embedding_file_name.endswith(".ckpot")
+        and not embedding_file_name.endswith(".bin")
     )
 
 
@@ -313,6 +323,7 @@ def remove_file_extension(embedding_file_name: str):
         embedding_file_name.replace(".pt", "")
         .replace(".safetensors", "")
         .replace(".bin", "")
+        .replace(".ckpt", "")
     )
 
 
