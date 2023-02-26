@@ -178,6 +178,29 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
 
+    if "emb_params" in embed.keys():
+        return decode_kohya_ss_embedding(embed, metadata)
+    else:
+        return decode_a1111_embedding(embed, embedding_file_name)
+
+
+def decode_kohya_ss_embedding(embed: dict, metadata: dict):
+    global DIMS_PER_VECTOR
+
+    vector_data = {}
+    # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
+    tensors = embed["emb_params"]
+    vector_data = torch.flatten(tensors).tolist()
+    magnitude = get_vector_data_magnitude(vector_data)
+    strength = get_vector_data_strength(vector_data)
+    vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
+
+    return metadata.get("ss_output_name", ""), metadata.get("ss_max_train_steps"), metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), tensors, vectors_per_token, magnitude, strength
+
+
+def decode_a1111_embedding(embed: dict, embedding_file_name: str):
+    global DIMS_PER_VECTOR
+
     # for k,v in embed.items():
     #     print(k,v) # debug to see what values are in the embedding
 
@@ -195,35 +218,8 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     magnitude = None
     strength = None
     vectors_per_token = None
-    if "emb_params" in embed.keys():
-        return decode_kohya_ss_embedding(embed, metadata)
-    else:
-        return decode_a1111_embedding(embed)
 
-
-def decode_kohya_ss_embedding(embed: dict, metadata: dict):
-    vector_data = {}
-    # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
-    tensors = embed["emb_params"]
-    vector_data = torch.flatten(tensors).tolist()
-    magnitude = get_vector_data_magnitude(vector_data)
-    strength = get_vector_data_strength(vector_data)
-    vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
-
-    return metadata.get("ss_output_name", ""), metadata.get("ss_max_train_steps"), metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), tensors, vectors_per_token, magnitude, strength
-
-
-def decode_a1111_embedding(embed: dict):
-    vector_data = {}
-    string_to_token = embed["string_to_token"]  #{'*': 265}
-    string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178,  0.0123, -0.0003,  ...,  0.0420, -0.0379, -0.0294], [-0.0085, -0.0037,  0.0069,  ...,  0.0240, -0.0191,  0.0299], [ 0.0163, -0.0113,  0.0093,  ...,  0.0757,  0.0006, -0.0272]], requires_grad=True)}
-    internal_name = embed["name"]               #EmbedTest
-    step = embed["step"] + 1                    #1000
-    sd_checkpoint_hash = embed["sd_checkpoint"] #a9263745
-    sd_checkpoint_name = embed["sd_checkpoint_name"]   #v1-5-pruned
-    token = list(string_to_token.keys())[0]  #"*"
-
-    if file_extension == ".pt":
+    if "string_to_token" in embed:
         # .pt extension, created by Automatic1111
         # has additional data: internal name, step, checkpoint hash/name, token
         # tensors are in the string_to_param key/value pair
