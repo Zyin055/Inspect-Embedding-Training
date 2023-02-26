@@ -183,6 +183,11 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     # for k,v in embed.items():
     #     print(k,v) # debug to see what values are in the embedding
 
+    #print(f"{embedding_file_name} type(embed)={type(embed)}")
+    if type(embed) == Tensor:   # normally type(embed) == dict, but some can just be the raw Tensor
+        #in this case 'embed' is a Tensor instead of a dict, so convert it a simple dict
+        embed = {"": embed}
+
     if "emb_params" in embed.keys():
         return decode_kohya_ss_embedding(embed, metadata)
     else:
@@ -247,9 +252,9 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
         strength = get_vector_data_strength(vector_data)
         vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    elif file_extension == ".bin":
-        # .bin extension
-        # has no additional data
+    else: #if len(embed.items()) >= 1: #file_extension == ".bin":
+        # .bin extension, or
+        # has no additional data, or
         # has a single key/value pair with the tensors
 
         if len(embed.items()) > 1:
@@ -258,14 +263,14 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
                 print(f"  {k}: {v}") # to show the user what extra values are stored in the embedding
 
         # we hope that if any extra data is in the .bin file that it comes after the tensors at position 1
-        tensors = next(iter(embed.items()))[1]          #get the first and only element in the embed dict - "<EmbedName>": tensor([...])
+        tensors = next(iter(embed.items()))[1]          # get the first and only element in the embed dict - "key": tensor([...])
         vector_data = torch.flatten(tensors).tolist()
         magnitude = get_vector_data_magnitude(vector_data)
         strength = get_vector_data_strength(vector_data)
         vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    else:
-        print(f"Embedding {embedding_file_name} has an unrecognized file extension: '{file_extension}'")
+    # else:
+    #     print(f"Embedding {embedding_file_name} has an unrecognized file extension: '{file_extension}'")
 
     return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
 
