@@ -63,7 +63,7 @@ EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None
 * `--help, -h` Shows help text.
 * `--dir` The "/path/to/embedding/folder" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.
 * `--out` The "/path/to/an/output/folder" to use instead of the local path for outputting images.
-* `--file` The "EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude
+* `--file` The "/path/to/EmbeddingName.pt" to inspect. Prints the embedding's: internal name, model name/hash, number of vectors per token, training step count, and average vector strength/magnitude. Supports .pt, .bin, .ckpt, and .safetensors file formats.
 * `--folder` The "/path/to/a/folder/with/embeddings" to to inspect the strength/weight of multiple embeddings at once, similar to `--file` but for a whole folder.
 
 ## Changelog
