@@ -151,12 +151,16 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
 
         #df.to_markdown(f"{file_name}.md", index=False, header=True)
 
+
 def is_safetensors(embedding_file_name): 
     return embedding_file_name.endswith(".safetensors")
+
 
 def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, str, Tensor, int, float, float):
     global DIMS_PER_VECTOR
 
+    embed = {}
+    metadata = {}
     try:
         if is_safetensors(embedding_file_name):
             try:
@@ -164,12 +168,10 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
             except ImportError as e:
                 raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
 
-            embed = {}
-            metadata = {}
-            with safe_open(embedding_file_name, framework="pt", device="cpu") as f:
-                for k in f.keys():
-                    embed[k] = f.get_tensor(k)
-                metadata = f.metadata() or {}
+            with safe_open(embedding_file_name, framework="pt", device="cpu") as embed_safetensor:
+                for k in embed_safetensor.keys():
+                    embed[k] = embed_safetensor.get_tensor(k)
+                metadata = embed_safetensor.metadata() or {}
         else:
             embed = torch.load(embedding_file_name, map_location=torch.device("cpu"))
             metadata = embed
@@ -177,6 +179,9 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     except FileNotFoundError as e:
         print(f"[ERROR] Embedding file {embedding_file_name} not found.")
         sys.exit(e)
+
+    # for k,v in embed.items():
+    #     print(k,v) # debug to see what values are in the embedding
 
     if "emb_params" in embed.keys():
         return decode_kohya_ss_embedding(embed, metadata)
@@ -187,22 +192,23 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
 def decode_kohya_ss_embedding(embed: dict, metadata: dict):
     global DIMS_PER_VECTOR
 
-    vector_data = {}
-    # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
-    tensors = embed["emb_params"]
+    tensors = embed["emb_params"]   # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
     vector_data = torch.flatten(tensors).tolist()
     magnitude = get_vector_data_magnitude(vector_data)
     strength = get_vector_data_strength(vector_data)
     vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    return metadata.get("ss_output_name", ""), metadata.get("ss_max_train_steps"), metadata.get("sshs_model_hash"), metadata.get("ss_sd_model_name", ""), metadata.get("ss_output_name", ""), tensors, vectors_per_token, magnitude, strength
+    internal_name = metadata.get("ss_output_name", None)
+    step = metadata.get("ss_max_train_steps", None)
+    sd_checkpoint_hash = metadata.get("sshs_model_hash", None)
+    sd_checkpoint_name = metadata.get("ss_sd_model_name", None)
+    token = None
+
+    return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
 
 
 def decode_a1111_embedding(embed: dict, embedding_file_name: str):
     global DIMS_PER_VECTOR
-
-    # for k,v in embed.items():
-    #     print(k,v) # debug to see what values are in the embedding
 
     split_tup = os.path.splitext(embedding_file_name)
     #file_name = split_tup[0]
@@ -214,7 +220,6 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
     sd_checkpoint_name = None
     token = None
     tensors = None
-    vector_data = {}
     magnitude = None
     strength = None
     vectors_per_token = None
@@ -301,15 +306,6 @@ def get_learn_rate_changes(textual_inversion_loss_data):
     return learn_rate_changes
 
 
-def is_embedding_file(embedding_file_name: str):
-    return (
-        not embedding_file_name.endswith(".pt")
-        and not embedding_file_name.endswith(".safetensors")
-        and not embedding_file_name.endswith(".ckpot")
-        and not embedding_file_name.endswith(".bin")
-    )
-
-
 def remove_file_extension(embedding_file_name: str):
     return (
         embedding_file_name.replace(".pt", "")
@@ -339,7 +335,7 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
                 continue
 
             embed_path = os.path.join(embedding_dir, embedding_file_name)
-            embed = torch.load(embed_path, map_location="cpu")
+            #embed = torch.load(embed_path, map_location="cpu")
             #tensors = embed["string_to_param"]["*"]
             #step = embed["step"] + 1  # starts counting at 0, so add 1
             #vector_data[step] = torch.flatten(tensors).tolist()
