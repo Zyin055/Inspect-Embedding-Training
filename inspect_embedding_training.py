@@ -9,35 +9,46 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from torch import Tensor
+from typing import Tuple, Dict, Union
 
-#os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 #######################################################################################################################
 #                                                      CONFIG                                                         #
 #######################################################################################################################
-SAVE_LOSS_GRAPH_IMG: bool = True              # Create a .jpg of the Loss graph
-SAVE_VECTOR_GRAPH_IMG: bool = True            # Create a .jpg of the Vector graphs
+SAVE_LOSS_GRAPH_IMG: bool = True  # Create a .jpg of the Loss graph
+SAVE_VECTOR_GRAPH_IMG: bool = True  # Create a .jpg of the Vector graphs
 
-SHOW_PLOTS_AFTER_GENERATION: bool = False     # Show a popup with the Loss and Vector graphs after running this script
+SHOW_PLOTS_AFTER_GENERATION: bool = False  # Show a popup with the Loss and Vector graphs after running this script
 
-GRAPH_IMAGE_SIZE: tuple[int, int] = (19, 9)   # (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
-GRAPH_SHOW_TITLE: bool = True                 # Adds the embed name at the top of the graphs
+GRAPH_IMAGE_SIZE: Tuple[int, int] = (19, 9)
+# (X,Y) tuple in inches (multiply by 100 for (X,Y) pixel size for the output graphs)
+GRAPH_SHOW_TITLE: bool = True  # Adds the embed name at the top of the graphs
 
-VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True           # Generates a vector graph with all vectors displayed
-VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False       # Generates a vector graph with limited number of vectors displayed
-VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100     # Limits to this number of vectors drawn on the vector graph to this many lines. Normally there are 768 vectors per token.
-VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True          # Adds the learning rate labels and vertical lines on the vector graphs
+VECTOR_GRAPH_CREATE_FULL_GRAPH: bool = True
+# Generates a vector graph with all vectors displayed
+VECTOR_GRAPH_CREATE_LIMITED_GRAPH: bool = False
+# Generates a vector graph with limited number of vectors displayed
+VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS: int = 100
+# Limits to this number of vectors drawn on the vector graph to this many lines.
+# Normally there are 768 vectors per token.
+VECTOR_GRAPH_SHOW_LEARNING_RATE: bool = True
+# Adds the learning rate labels and vertical lines on the vector graphs
 
-EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = None          # Saves the table when using the --folder launch arg. Valid values are: None, "xlsx", "csv", "html", "json". If you get a ModuleNotFoundError: No module named 'openpyxl', then try running: pip install openpyxl
+EXPORT_FOLDER_EMBEDDING_TABLE_TO: str = ''  # None
+# Saves the table when using the --folder launch arg. Valid values are: None, "xlsx", "csv", "html", "json".
+# If you get a ModuleNotFoundError: No module named 'openpyxl', then try running: pip install openpyxl
 #######################################################################################################################
 #                                                    END CONFIG                                                       #
 #######################################################################################################################
 
 
-DIMS_PER_VECTOR = 768 # SD 1.5 has 768, 2.X has more
-BASEDIR: str = os.path.realpath(os.path.dirname(__file__))   # the path where this .py file is located, ex "C:\Stable Diffusion\textual_inversion\2022-12-30\EmbedFolderName"
-output_dir: str = BASEDIR    # where the output graph images are saved
-working_dir: str = BASEDIR   # where we look for embeddings
+DIMS_PER_VECTOR = 768  # SD 1.5 has 768, 2.X has more
+BASEDIR: str = os.path.realpath(os.path.dirname(
+    __file__))
+# the path where this .py file is located, ex "C:\Stable Diffusion\textual_inversion\2022-12-30\EmbedFolderName"
+output_dir: str = BASEDIR  # where the output graph images are saved
+working_dir: str = BASEDIR  # where we look for embeddings
 
 
 def parse_args(argv) -> None:
@@ -47,14 +58,17 @@ def parse_args(argv) -> None:
         sys.exit(e)
 
     for opt, arg in opts:
-        #print(f"arg={arg}")
+        # rint(f"arg={arg}")
         if opt in ("-h", "--help"):
-            print("Place this Python file in the textual inversion folder in the specific embedding folder you want to analyze (next to textual_inversion_loss.csv). Optionally, you can use the --dir \"/path/to/folder\" launch argument to specify the folder to use.")
+            print("Place this Python file in the textual inversion folder in the specific embedding folder you want"
+                  " to analyze (next to textual_inversion_loss.csv). Optionally, "
+                  "you can use the --dir \"/path/to/folder\" launch argument to specify the folder to use.")
             print("launch args:")
             print("--help -h")
             print("    This help message.")
             print("--dir")
-            print("    The \"/path/to/embedding/folder\" to use instead of the local path where this script is at. This directory should have the textual_inversion_loss.csv file in it.")
+            print("    The \"/path/to/embedding/folder\" to use instead of the local path where this script is at. "
+                  "This directory should have the textual_inversion_loss.csv file in it.")
             print("--out")
             print("    The \"/path/to/an/output/folder\" to use instead of the local path for outputting images.")
             sys.exit(0)
@@ -84,13 +98,15 @@ def inspect_embedding_file(embedding_file_name: str) -> None:
 
     if file_extension == "":
         print(f"No file extension supplied for '{embedding_file_name}', assuming it has a .pt file extension.")
-        embedding_file_name = embedding_file_name + ".pt"   #fix user error, add file extension
+        embedding_file_name = embedding_file_name + ".pt"  # ix user error, add file extension
 
     elif not is_embedding_file_extension(file_extension):
-        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format (.pt .bin .safetensors .ckpt).")
+        print(f"[ERROR] '{embedding_file_name}' is not a recognized embedding file format "
+              f"(.pt .bin .safetensors .ckpt).")
         sys.exit(1)
 
-    internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embedding_file_name)
+    (internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors,
+     vectors_per_token, magnitude, strength) = get_embedding_file_data(embedding_file_name)
 
     print(f"Data for embedding file: {embedding_file_name}")
     print(f"  Internal name: {internal_name}")
@@ -110,15 +126,16 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
     try:
         for embedding_file_name in os.listdir(embedding_folder_name):  # "EmbedName-500.pt"
             split_tup = os.path.splitext(embedding_file_name)
-            #file_name = split_tup[0]
+            # ile_name = split_tup[0]
             file_extension = split_tup[1]
             if not is_embedding_file_extension(file_extension):
                 continue
 
             embed_path = os.path.join(embedding_folder_name, embedding_file_name)
-            internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
+            (internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude,
+             strength) = get_embedding_file_data(embed_path)
 
-            #data[step] = [embedding_file_name, strength, magnitude]
+            # ata[step] = [embedding_file_name, strength, magnitude]
             data.append([embedding_file_name, strength, magnitude])
             final_embedding_file_name = embedding_file_name
             i += 1
@@ -129,7 +146,7 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
     if i == 0:
         print(f"[ERROR] No embedding files found at: {embedding_folder_name}")
 
-    #print the table
+    # rint the table
     pd.options.display.max_rows = max_rows
     pd.options.display.float_format = "{:,.4f}".format
     data.sort(key=lambda x: x[sorted_column])
@@ -149,10 +166,10 @@ def inspect_embedding_folder(embedding_folder_name: str, max_rows: int = 1000, s
         elif file_extension == "json":
             df.to_json(f"{file_name}.{file_extension}")
 
-        #df.to_markdown(f"{file_name}.md", index=False, header=True)
+        # f.to_markdown(f"{file_name}.md", index=False, header=True)
 
 
-def is_safetensors(embedding_file_name): 
+def is_safetensors(embedding_file_name):
     return embedding_file_name.endswith(".safetensors")
 
 
@@ -164,9 +181,10 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     try:
         if is_safetensors(embedding_file_name):
             try:
-                from safetensors import safe_open 
+                from safetensors import safe_open
             except ImportError as e:
-                raise ImportError(f"The embedding is in safetensors format and it is not installed, use `pip install safetensors`: {e}")
+                raise ImportError(f"The embedding is in safetensors format and it is not installed, "
+                                  f"use `pip install safetensors`: {e}")
 
             with safe_open(embedding_file_name, framework="pt", device="cpu") as embed_safetensor:
                 for k in embed_safetensor.keys():
@@ -183,9 +201,9 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
     # for k,v in embed.items():
     #     print(k,v) # debug to see what values are in the embedding
 
-    #print(f"{embedding_file_name} type(embed)={type(embed)}")
-    if type(embed) == Tensor:   # normally type(embed) == dict, but some can just be the raw Tensor
-        #in this case 'embed' is a Tensor instead of a dict, so convert it a simple dict
+    # rint(f"{embedding_file_name} type(embed)={type(embed)}")
+    if type(embed) == Tensor:  # normally type(embed) == dict, but some can just be the raw Tensor
+        # n this case 'embed' is a Tensor instead of a dict, so convert it a simple dict
         embed = {"": embed}
 
     if "emb_params" in embed.keys():
@@ -197,7 +215,7 @@ def get_embedding_file_data(embedding_file_name: str) -> (str, int, str, str, st
 def decode_kohya_ss_embedding(embed: dict, metadata: dict):
     global DIMS_PER_VECTOR
 
-    tensors = embed["emb_params"]   # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
+    tensors = embed["emb_params"]  # {'emb_params': tensor([[ 5.9789e-01,  2.1925e-01, -1.1750e-01, -2.1693e-01, -1.508
     vector_data = torch.flatten(tensors).tolist()
     magnitude = get_vector_data_magnitude(vector_data)
     strength = get_vector_data_strength(vector_data)
@@ -209,14 +227,15 @@ def decode_kohya_ss_embedding(embed: dict, metadata: dict):
     sd_checkpoint_name = metadata.get("ss_sd_model_name", None)
     token = None
 
-    return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
+    return (internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token,
+            magnitude, strength)
 
 
 def decode_a1111_embedding(embed: dict, embedding_file_name: str):
     global DIMS_PER_VECTOR
 
     split_tup = os.path.splitext(embedding_file_name)
-    #file_name = split_tup[0]
+    # ile_name = split_tup[0]
     file_extension = split_tup[1]
 
     internal_name = None
@@ -235,24 +254,26 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
         # tensors are in the string_to_param key/value pair
 
         if embed["string_to_token"] is None or embed["string_to_param"] is None:
-            print(f"Could not find the tensors inside of {embedding_file_name}. The internal data format is not recognized.")
+            print(f"Could not find the tensors inside of {embedding_file_name}. The internal data format is not "
+                  f"recognized.")
             sys.exit()
 
-        internal_name = embed["name"]                                                               #EmbedTest
-        step = embed["step"] + 1 if embed["step"] else None                                         #1000
-        sd_checkpoint_hash = embed["sd_checkpoint"] if embed["sd_checkpoint"] else None             #a9263745
-        sd_checkpoint_name = embed["sd_checkpoint_name"] if embed["sd_checkpoint_name"] else None   #v1-5-pruned
+        internal_name = embed["name"]  # mbedTest
+        step = embed["step"] + 1 if embed["step"] else None  # 000
+        sd_checkpoint_hash = embed["sd_checkpoint"] if embed["sd_checkpoint"] else None  # 9263745
+        sd_checkpoint_name = embed["sd_checkpoint_name"] if embed["sd_checkpoint_name"] else None  # 1-5-pruned
 
-        string_to_token = embed["string_to_token"]  #{'*': 265}
-        #string_to_param = embed["string_to_param"]  #{'*': tensor([[ 0.0178, ..., -0.0294], [-0.0085, ...,  0.0757]], requires_grad=True)}
-        token = list(string_to_token.keys())[0]     #"*"
+        string_to_token = embed["string_to_token"]  # {'*': 265}
+        # tring_to_param = embed["string_to_param"]
+        # {'*': tensor([[ 0.0178, ..., -0.0294], [-0.0085, ...,  0.0757]], requires_grad=True)}
+        token = list(string_to_token.keys())[0]  # "*"
         tensors = embed["string_to_param"][token]
         vector_data = torch.flatten(tensors).tolist()
         magnitude = get_vector_data_magnitude(vector_data)
         strength = get_vector_data_strength(vector_data)
         vectors_per_token = int(len(vector_data) / DIMS_PER_VECTOR)
 
-    else: #if len(embed.items()) >= 1: #file_extension == ".bin":
+    else:  # f len(embed.items()) >= 1: # ile_extension == ".bin":
         # .bin extension, or
         # has no additional data, or
         # has a single key/value pair with the tensors
@@ -260,10 +281,11 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
         if len(embed.items()) > 1:
             print(f"{embedding_file_name} has additional internal data that hasn't been parsed:")
             for k, v in embed.items():
-                print(f"  {k}: {v}") # to show the user what extra values are stored in the embedding
+                print(f"  {k}: {v}")  # to show the user what extra values are stored in the embedding
 
         # we hope that if any extra data is in the .bin file that it comes after the tensors at position 1
-        tensors = next(iter(embed.items()))[1]          # get the first and only element in the embed dict - "key": tensor([...])
+        tensors = next(iter(embed.items()))[1]
+        # get the first and only element in the embed dict - "key": tensor([...])
         vector_data = torch.flatten(tensors).tolist()
         magnitude = get_vector_data_magnitude(vector_data)
         strength = get_vector_data_strength(vector_data)
@@ -272,28 +294,32 @@ def decode_a1111_embedding(embed: dict, embedding_file_name: str):
     # else:
     #     print(f"Embedding {embedding_file_name} has an unrecognized file extension: '{file_extension}'")
 
-    return internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength
+    return (internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token,
+            magnitude, strength)
 
 
-def load_textual_inversion_loss_data_from_file() -> dict[int, dict[str, str]]:
-    loss_csv_file = os.path.join(working_dir, "textual_inversion_loss.csv") # the default name created by Automatic1111
+def load_textual_inversion_loss_data_from_file() -> Dict[int, Dict[str, str]]:
+    loss_csv_file = os.path.join(working_dir, "textual_inversion_loss.csv")  # the default name created by Automatic1111
     if os.path.isfile(loss_csv_file):
         with open(loss_csv_file) as metadata_file:
             return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
 
-    loss_csv_file = os.path.join(working_dir, "prompt_tuning_loss.csv") # alternate name created by DreamArtist
+    loss_csv_file = os.path.join(working_dir, "prompt_tuning_loss.csv")  # alternate name created by DreamArtist
     if os.path.isfile(loss_csv_file):
         print(f"Found prompt_tuning_loss.csv, loading that instead of textual_inversion_loss.csv")
         with open(loss_csv_file) as metadata_file:
             return {int(rec["step"]): rec for rec in csv.DictReader(metadata_file)}
 
     print(f"[ERROR] Could not find file: textual_inversion_loss.csv")
-    print("This error could happen if this script is set to use the wrong directory, or if not enough training steps have passed for the file to be created yet. In Automatic1111 Web UI, try lowering the value for the setting \"Save an csv containing the loss to log directory every N steps, 0 to disable\".")
+    print("This error could happen if this script is set to use the wrong directory, "
+          "or if not enough training steps have passed for the file to be created yet. "
+          "In Automatic1111 Web UI, try lowering the value for the setting \""
+          "Save an csv containing the loss to log directory every N steps, 0 to disable\".")
     sys.exit()
 
 
 def get_learn_rate_changes(textual_inversion_loss_data):
-    learn_rate_changes = {}  # dict[index: int, (step: int, learn rate: float)]
+    learn_rate_changes = {}  # Dict[index: int, (step: int, learn rate: float)]
     last_learn_rate = -1
     new_i = 0
     for step in textual_inversion_loss_data:
@@ -320,9 +346,9 @@ def remove_file_extension(embedding_file_name: str):
     )
 
 
-def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int, int):
+def analyze_embedding_files(embedding_dir: str) -> (Dict[int, Tensor], str, int, int):
     global DIMS_PER_VECTOR
-    embed_name = None        # "EmbedName"
+    embed_name = None  # "EmbedName"
     number_of_embedding_files = 0
     highest_step = -1
     vector_data = {}
@@ -335,19 +361,20 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
             if not is_embedding_file_extension(file_extension):
                 continue
 
-            if embedding_file_name.endswith("-neg.pt"): # from the DreamArtist extension
+            if embedding_file_name.endswith("-neg.pt"):  # from the DreamArtist extension
                 num_skipped_neg_files += 1
                 continue
 
             embed_path = os.path.join(embedding_dir, embedding_file_name)
-            #embed = torch.load(embed_path, map_location="cpu")
-            #tensors = embed["string_to_param"]["*"]
-            #step = embed["step"] + 1  # starts counting at 0, so add 1
-            #vector_data[step] = torch.flatten(tensors).tolist()
-            #number_of_embedding_files += 1
+            # mbed = torch.load(embed_path, map_location="cpu")
+            # ensors = embed["string_to_param"]["*"]
+            # tep = embed["step"] + 1  # starts counting at 0, so add 1
+            # ector_data[step] = torch.flatten(tensors).tolist()
+            # umber_of_embedding_files += 1
 
-            internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude, strength = get_embedding_file_data(embed_path)
-            #tensors = embed["string_to_param"][token]
+            (internal_name, step, sd_checkpoint_hash, sd_checkpoint_name, token, tensors, vectors_per_token, magnitude,
+             strength) = get_embedding_file_data(embed_path)
+            # ensors = embed["string_to_param"][token]
             vector_data[step] = torch.flatten(tensors).tolist()
             number_of_embedding_files += 1
 
@@ -356,24 +383,28 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
             if step > highest_step:
                 highest_step = step  # + 1
                 embed_name = embedding_file_name  # save the file name with the highest step count
-                #vectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
+                # ectors_per_token = int(len(vector_data[step]) / DIMS_PER_VECTOR)
 
             # print(f"Loaded data from embedding: {embed_file_name}")
 
     except FileNotFoundError as e:
-        print("[ERROR] Make sure to place this Python file in the textual inversion folder in the specific embedding folder you want to analyze (next to textual_inversion_loss.csv). Optionally, you can use the --dir \"/path/to/embedding/folder\" launch argument to specify the folder to use.")
+        print("[ERROR] Make sure to place this Python file in the textual inversion folder in the specific embedding "
+              "folder you want to analyze (next to textual_inversion_loss.csv). Optionally, "
+              "you can use the --dir \"/path/to/embedding/folder\" launch argument to specify the folder to use.")
         sys.exit(e)
 
     if embed_name is None:
         raise RuntimeError("Could not find an embedding")
 
     vectors_per_token = int(len(vector_data[highest_step]) / DIMS_PER_VECTOR)
-    embed_name = remove_file_extension(embed_name)[:-(len(str(highest_step)) + 1)]  # "EmbedName", trim "-XXXX.pt" off the end
+    embed_name = remove_file_extension(embed_name)[:-(len(str(highest_step)) + 1)]
+    # "EmbedName", trim "-XXXX.pt" off the end
     print(f"This embedding has {vectors_per_token} vectors per token.")
     print(f"Loaded {number_of_embedding_files} embedding files up to training step {highest_step}.")
 
     if num_skipped_neg_files > 0:
-        # DreamArtist extension creates a "EmbedName-XXXX-neg.pt" file along with the usual "EmbedName-XXXX.pt" file, so we ignore the "-neg.pt" files
+        # DreamArtist extension creates a "EmbedName-XXXX-neg.pt" file along with the usual "EmbedName-XXXX.pt" file,
+        # so we ignore the "-neg.pt" files
         print(f"Skipped {num_skipped_neg_files} files that ended with \"-neg.pt\"")
 
     return tensors, vector_data, embed_name, highest_step, number_of_embedding_files
@@ -382,7 +413,8 @@ def analyze_embedding_files(embedding_dir: str) -> (dict[int, Tensor], str, int,
 def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: str) -> None:
     plt.figure(figsize=GRAPH_IMAGE_SIZE)
     loss = pd.DataFrame(data).T.sort_index()["loss"].astype(float).loc[1:]
-    #loss = pd.DataFrame(data).T.sort_index()["loss"].astype(float).iloc[1:]    # don't know what the difference is between loc and iloc, both work.
+    # oss = pd.DataFrame(data).T.sort_index()["loss"].astype(float).iloc[1:]
+    # don't know what the difference is between loc and iloc, both work.
     # print("loss:")
     # print(loss)
 
@@ -396,7 +428,7 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
     z2 = np.polyfit(loss.index, loss, 5)
     p2 = np.poly1d(z2)(loss.index)
     p3 = np.poly1d([0, z1[1]])(loss.index)
-    
+
     plt.plot(p3, ":", color=(0, 0, 0, 0.5))
     plt.plot(p1, color=(1, 0, 1, 0.5))
     plt.plot(p2, color=(0, 1, 1, 0.5))
@@ -414,8 +446,13 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
         print(f"Created: {output_file_name}")
 
 
-def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rate_changes: dict[int, (int, float)], highest_step: int, show_learning_rate: bool, save_img: bool, output_file_name: str, limit_num_vectors: int) -> None:
-
+def create_vector_plot(title: str, data: Dict[int, Dict[int, Tensor]],
+                       learn_rate_changes: Dict[int, Union[int, float]],
+                       highest_step: int,
+                       show_learning_rate: bool,
+                       save_img: bool,
+                       output_file_name: str,
+                       limit_num_vectors: int) -> None:
     # need to get the strength/magnitude BEFORE we truncate the data
     strength = get_vector_data_strength(data[highest_step])
     magnitude = get_vector_data_magnitude(data[highest_step])
@@ -439,24 +476,23 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
     if show_learning_rate:
         # plot the Learn rate: XX labels and lines
         for i in learn_rate_changes:
-            #print(f"i={i}, len(learn_rate_changes)={len(learn_rate_changes)}")
+            # rint(f"i={i}, len(learn_rate_changes)={len(learn_rate_changes)}")
             step, learn_rate = learn_rate_changes[i]
-            nextStep = highest_step
+            nextstep = highest_step
             if i < len(learn_rate_changes) - 1:
-                nextStep = learn_rate_changes[i+1][0]
+                nextstep = learn_rate_changes[i + 1][0]
 
-            #print(f"step={step}, nextStep={nextStep}")
-            x = (step + nextStep) / 2
+            # rint(f"step={step}, nextStep={nextStep}")
+            x = (step + nextstep) / 2
             y = (max_y_value - min_y_value) * 1.03 + min_y_value
             # if i % 2 == 1:
             #     y += (max_y_value - min_y_value) * 0.06
-            #print(f"Learn rate: {learn_rate} at ({x},{y}), step={step}, nextStep={nextStep}")
-            plt.text(x, y, f"Learn rate:\n{learn_rate}", fontsize="12", ha="center", va="center")    #Learn rate labels
+            # rint(f"Learn rate: {learn_rate} at ({x},{y}), step={step}, nextStep={nextStep}")
+            plt.text(x, y, f"Learn rate:\n{learn_rate}", fontsize="12", ha="center", va="center")
+            # earn rate labels
 
-            if len(learn_rate_changes) > 1: #create vertical line only if there is a learning rate change
+            if len(learn_rate_changes) > 1:  # reate vertical line only if there is a learning rate change
                 plt.axvline(step, color=(0, 0, 0, 0.4), linestyle="dotted")
-
-
 
     if vectors_shown_text is not None:
         x = (min_x_value + max_x_value) / 2
@@ -484,15 +520,15 @@ def create_vector_plot(title: str, data: dict[int, dict[int, Tensor]], learn_rat
     print(f"  Average vector magnitude: {round(magnitude, 4)}")
 
 
-def get_vector_data_strength(data: dict[int, Tensor]) -> float:
+def get_vector_data_strength(data: Dict[int, Tensor]) -> float:
     value = 0
     for n in data:
         value += abs(n)
-    value = value / len(data) # the average value of each vector (ignoring negative values)
+    value = value / len(data)  # the average value of each vector (ignoring negative values)
     return value
 
 
-def get_vector_data_magnitude(data: dict[int, Tensor]) -> float:
+def get_vector_data_magnitude(data: Dict[int, Tensor]) -> float:
     value = 0
     for n in data:
         value += pow(n, 2)
@@ -503,39 +539,39 @@ def get_vector_data_magnitude(data: dict[int, Tensor]) -> float:
 
 def is_embedding_file_extension(file_extension: str) -> bool:
     return (
-        file_extension == ".pt"
-        or file_extension == ".bin"
-        or file_extension == ".safetensors"
-        or file_extension == ".ckpt"
+            file_extension == ".pt"
+            or file_extension == ".bin"
+            or file_extension == ".safetensors"
+            or file_extension == ".ckpt"
     )
 
 
 def main():
-
     parse_args(sys.argv)
 
     if not SAVE_LOSS_GRAPH_IMG and not SAVE_VECTOR_GRAPH_IMG and not SHOW_PLOTS_AFTER_GENERATION:
-        print("[ERROR] Not set to create or show any plots. Change the global variables so that this script can do something.")
+        print("[ERROR] Not set to create or show any plots. "
+              "Change the global variables so that this script can do something.")
         sys.exit()
-
 
     embeddings_dir = os.path.join(working_dir, "embeddings")
     tensors, vector_data, embed_name, highest_step, number_of_embedding_files = analyze_embedding_files(embeddings_dir)
-    #print(f"vector_data:")
-    #print(vector_data)  # dict{step:[768xDimensions of floats]}
-    #print(pd.DataFrame(vector_data).T.sort_index())  # massive amounts of numbers, [step][768 x Dimensions of floats]
+    # rint(f"vector_data:")
+    # rint(vector_data)  # dict{step:[768xDimensions of floats]}
+    # rint(pd.DataFrame(vector_data).T.sort_index())  # massive amounts of numbers, [step][768 x Dimensions of floats]
 
     textual_inversion_loss_data = None  # this is loaded only if needed later on
 
-    #print(f"learn_rate_changes: {learn_rate_changes}")
+    # rint(f"learn_rate_changes: {learn_rate_changes}")
     print("Generating graphs...")
 
     if SAVE_LOSS_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # loss plot
         if textual_inversion_loss_data is None:
             textual_inversion_loss_data = load_textual_inversion_loss_data_from_file()
-            #print(f"textual_inversion_loss_data:")
-            #print(textual_inversion_loss_data)
-            #print(pd.DataFrame(textual_inversion_loss_data).T.sort_index())   # the same format as the textual_inversion_loss.csv file
+            # rint(f"textual_inversion_loss_data:")
+            # rint(textual_inversion_loss_data)
+            # rint(pd.DataFrame(textual_inversion_loss_data).T.sort_index())
+            # the same format as the textual_inversion_loss.csv file
 
         create_loss_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                          data=textual_inversion_loss_data,
@@ -544,13 +580,11 @@ def main():
     else:
         print("Skipping making a loss plot.")
 
-
     if number_of_embedding_files == 0:
         print(f"[ERROR] Could not find any embedding files in {embeddings_dir}")
         sys.exit()
     elif number_of_embedding_files == 1:
         print("[WARNING] Only 1 embedding file found, the vector plot won't show any useful data.")
-
 
     if SAVE_VECTOR_GRAPH_IMG or SHOW_PLOTS_AFTER_GENERATION:  # vector plot
 
@@ -561,7 +595,6 @@ def main():
             learn_rate_changes = get_learn_rate_changes(textual_inversion_loss_data)
 
         if VECTOR_GRAPH_CREATE_FULL_GRAPH:
-
             create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                                data=vector_data,
                                learn_rate_changes=learn_rate_changes,
@@ -572,23 +605,25 @@ def main():
                                limit_num_vectors=-1,
                                )
 
-
         if VECTOR_GRAPH_CREATE_LIMITED_GRAPH:
 
             if 0 < VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS < len(vector_data[highest_step]):
 
                 create_vector_plot(title=embed_name if GRAPH_SHOW_TITLE else None,
                                    data=vector_data,
-                                   #data=copied_vector_data,
+                                   # ata=copied_vector_data,
                                    learn_rate_changes=learn_rate_changes,
                                    highest_step=highest_step,
                                    show_learning_rate=VECTOR_GRAPH_SHOW_LEARNING_RATE,
                                    save_img=SAVE_VECTOR_GRAPH_IMG,
-                                   output_file_name=f"{embed_name}-{highest_step}-vector-({VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}-vector-limit).jpg",
+                                   output_file_name=f"{embed_name}-{highest_step}-vector-"
+                                                    f"({VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}-vector-limit).jpg",
                                    limit_num_vectors=VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS,
                                    )
             else:
-                print(f"[ERROR] VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS is set to {VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}. It needs to be greater than 0, or less than {len(vector_data[highest_step])}.")
+                print(f"[ERROR] VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS is set to "
+                      f"{VECTOR_GRAPH_LIMITED_GRAPH_NUM_VECTORS}. It needs to be greater than 0, or less than "
+                      f"{len(vector_data[highest_step])}.")
 
     else:
         print("Skipping making a vector plot.")
