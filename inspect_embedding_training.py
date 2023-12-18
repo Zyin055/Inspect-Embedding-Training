@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from torch import Tensor
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 
 # os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
@@ -446,7 +446,7 @@ def create_loss_plot(title: str, data: dict, save_img: bool, output_file_name: s
 
 
 def create_vector_plot(title: str, data: Dict[int, Dict[int, Tensor]],
-                       learn_rate_changes: Dict[int, (int, float)],
+                       learn_rate_changes: Dict[int, Union[int, float]],
                        highest_step: int,
                        show_learning_rate: bool,
                        save_img: bool,
